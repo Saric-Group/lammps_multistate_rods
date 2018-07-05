@@ -1,0 +1,7 @@
+
+# Eclipse stuff
+.project
+.pydevproject
+.settings
+
+*.pyc

@@ -43,6 +43,7 @@ int_bead_types = None #dependent on "state_structures"
 int_bead_overlap = 0.0 #default
 int_bulge_out = 0.1*rod_radius #default
 total_beads = None #dependent on "state_structures"
+max_bead_type = None
 rod_mass = 1.0 #default
 
 # interaction properties
@@ -71,7 +72,7 @@ def set_dependent_params():
         - overlap (delta) of interaction sites (calculated from the number and size of beads and interaction sites)
         - the anti-symmetric partners in the "trans_penalty" matrix (trans_penalty[(n,m)] = -trans_penalty[(m,n)])
     '''
-    global body_bead_types, int_bead_types, body_beads, int_sites, total_beads
+    global body_bead_types, int_bead_types, max_bead_type, body_beads, int_sites, total_beads
     body_bead_types = set()
     int_bead_types = set()
     body_beads = len(state_structures[0].split('|')[0])
@@ -89,6 +90,7 @@ def set_dependent_params():
     total_beads = body_beads + int_sites
     body_bead_types = list(body_bead_types)
     int_bead_types = list(int_bead_types)
+    max_bead_type = max( (max(body_bead_types), max(int_bead_types)) )
     
     #global int_bead_overlap
     #int_bead_overlap = 2 - ((body_beads - 2)*(2 - body_bead_overlap)*rod_radius)/((int_sites - 1)*int_radius)
@@ -161,7 +163,7 @@ def generate_model(model_output_dir):
             for i in range(int_sites):
                 mol_file.write("{:2d} {:s}\n".format((body_beads+i+1), state_structures[state][body_beads+i+1]))
     
-def init(py_lammps, config_file_path, model_output_dir):
+def init(py_lammps, config_file_path, model_output_dir, log_path=None):
     '''
     This method needs to be called before any LAMMPS command.
     It generates files containing the description of the model using parameters given in the
@@ -176,11 +178,21 @@ def init(py_lammps, config_file_path, model_output_dir):
     be used by other methods later. If another instance of LAMMPS wants
     to be used the model has to be "reloaded" (init + setup etc.)
     
+    log_path : LAMMPS will be set to append to this log file and the methods of this library
+    will log useful information and hide a lot of useless ones (like the voluminous output of
+    "conformation_Monte_Carlo"). If not given everything will be logged (danger of huge log
+    files).
+    
     Returns : the maximum particle type number used in the config file
     '''
     
     set_model_params(config_file_path)
     generate_model(model_output_dir)
+    
+    global logfile
+    logfile = log_path
+    if logfile != None:
+        py_lmp.log(logfile, 'append')
     
     global py_lmp
     py_lmp = py_lammps
@@ -192,7 +204,7 @@ def init(py_lammps, config_file_path, model_output_dir):
     for state_name in rod_states:
         py_lmp.molecule(state_name, os.path.join(model_output_dir, state_name+'.mol'))
         
-    return max([max(body_bead_types), max(int_bead_types)])
+    return max_bead_type
 
 # LAMMPS group names
 
@@ -238,16 +250,26 @@ def setup_simulation(seed, temp, **kwargs):
     global sim_T
     sim_T = temp
     
-    # set masses
+    # set masses (interaction sites are massless, only body beads contribute to mass)
+    py_lmp.mass("{:d}*{:d}".format(type_offset + 1, type_offset + max_bead_type), rod_mass*10**-10)
     for bead_type in body_bead_types:
         py_lmp.mass(bead_type + type_offset, rod_mass/body_beads)
-    for bead_type in int_bead_types:
-        py_lmp.mass(bead_type + type_offset, rod_mass*10**-10) #interaction sites are massless, only body beads contribute to mass
-    #TODO give mass to types that are not used... !!
     
     # set interaction
     py_lmp.pair_style(int_type[0], global_cutoff)
     py_lmp.pair_modify("shift yes")
+        
+    if int_type[0] == 'lj/cut':
+        py_lmp.pair_coeff('*', '*', 0.0, 1.0, 1.0)
+    elif int_type[0] == 'nm/cut':
+        py_lmp.pair_coeff('*', '*', 0.0, 1.0, int_type[1], int_type[2], 1.0)
+    elif int_type[0] == 'morse':
+        py_lmp.pair_coeff('*', '*', 0.0, int_type[1], 1.0, 1.0)
+    elif int_type[0] == 'gauss/cut':
+        py_lmp.pair_coeff('*', '*', 0.0, 1.0, int_type[1], 1.0)
+    else:
+        raise Exception('Unknown/invalid int_type parameter: '+ str(int_type))
+    
     for bead_types, epsilon in eps.iteritems():
         sigma = 0
         for bead_type in bead_types:
@@ -393,6 +415,7 @@ def try_conformation_change(rod, U_before):
     rod.set_state(new_state)
     
     py_lmp.command('run 0 post no')
+    
     U_after = total_pe()
     accept_prob = exp(- (U_after - U_before)/sim_T - trans_penalty[(old_state,new_state)])
     
@@ -412,13 +435,20 @@ def conformation_Monte_Carlo(ntries):
     
     returns : the number of accepted moves
     '''
-    U_current = total_pe()
+    if logfile != None:
+        py_lmp.log('none') # don't print all the "run 0" runs
+    
+    U_start = U_current = total_pe()
     success = 0
     for _ in range(ntries):
         rod = get_random_rod()
         (acpt, U_current) = try_conformation_change(rod, U_current)
         success += acpt
     
+    if logfile != None:
+        py_lmp.log(logfile, 'append')
+        py_lmp.command('print "conformation_Monte_Carlo: {:d}/{:d} (delta_U = {:f})"'.format(
+                            success, ntries, U_start - U_current))
     return success
         
 #########################################################################################

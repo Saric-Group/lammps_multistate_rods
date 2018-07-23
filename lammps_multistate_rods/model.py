@@ -86,6 +86,7 @@ class Model(object):
         self.int_bead_overlap = int_bead_overlap
         self.int_bulge_out = int_bulge_out
         self.total_beads = None #dependent on "state_structures"
+        self.active_bead_types = None #dependent on "state_structures" & "eps"
         self.max_bead_type = None #dependent on "state_structures"
         self.rod_mass = rod_mass
         self.int_type = int_type
@@ -102,7 +103,6 @@ class Model(object):
         Sets the global variables of the instance that are used in the rest of the module
         but are derived from the essential information given by a user, specifically:
             - information contained in the string specification of the states (+ a consistency check)
-            - overlap (delta) of interaction sites (calculated from the number and size of beads and interaction sites)
             - the anti-symmetric partners in the "trans_penalty" matrix (trans_penalty[(n,m)] = -trans_penalty[(m,n)])
         '''
         self.body_bead_types = set()
@@ -123,6 +123,11 @@ class Model(object):
         self.body_bead_types = list(self.body_bead_types)
         self.int_bead_types = list(self.int_bead_types)
         self.max_bead_type = max((max(self.body_bead_types), max(self.int_bead_types)))
+        self.active_bead_types = set()
+        for bead_types, epsilon in self.eps.iteritems():
+            if epsilon != vx:
+                self.active_bead_types.update(bead_types)
+        self.active_bead_types = list(self.active_bead_types)
     
         #self.int_bead_overlap = 2 - ((self.body_beads - 2)*(2 - self.body_bead_overlap)*self.rod_radius)/((self.int_sites - 1)*self.int_radius)
     
@@ -141,19 +146,36 @@ class Model(object):
             os.makedirs(model_output_dir)
         for state in range(self.num_states):
             with open(os.path.join(model_output_dir, self.rod_states[state]+'.mol'), "w") as mol_file:
+                
                 mol_file.write("(AUTO-GENERATED file by the lammps_multistate_rods library, any changes will be OVERWRITTEN)\n\n")
+                
                 mol_file.write("{:d} atoms\n\n".format(self.total_beads))
+                mol_file.write("{:d} bonds\n\n".format(self.total_beads))
+                
                 mol_file.write("Coords\n\n")
                 for i in range(self.body_beads):
                     x = 0.0 - ((self.body_beads - 2*i - 1) / 2.)*(2*self.rod_radius - self.body_bead_overlap)
-                    mol_file.write("{:2d} {:6.3f}  0.000  0.000\n".format((i+1), x))
+                    mol_file.write("{:2d} {:6.3f}  0.000  0.000\n".format(i+1, x))
                 for i in range(self.int_sites):
                     x = 0.0 - ((self.int_sites - 2*i - 1) / 2.)*(2*self.int_radius - self.int_bead_overlap)
                     z = self.rod_radius - self.int_radius + self.int_bulge_out
-                    mol_file.write("{:2d} {:6.3f}  0.000 {:6.3f}\n".format((self.body_beads+i+1), x, z))
+                    mol_file.write("{:2d} {:6.3f}  0.000 {:6.3f}\n".format(self.body_beads+i+1, x, z))
+                
                 mol_file.write("\nTypes\n\n")
                 for i in range(self.body_beads):
-                    mol_file.write("{:2d} {:s}\n".format((i+1), self.state_structures[state][i]))
-                for i in range(self.int_sites):
-                    mol_file.write("{:2d} {:s}\n".format((self.body_beads+i+1), self.state_structures[state][self.body_beads+i+1]))
+                    mol_file.write("{:2d} {:s}\n".format(i+1, self.state_structures[state][i]))
+                for i in range(self.body_beads, self.total_beads):
+                    mol_file.write("{:2d} {:s}\n".format(i+1, self.state_structures[state][i+1]))
+                
+                mol_file.write("\nBonds\n\n") # cyclic bonds...
+                n = 1
+                for i in range(1, self.body_beads): # ... through body beads ...
+                    mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(n, i, i+1))
+                    n += 1
+                mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(n, self.body_beads, self.total_beads)) # last body - last int
+                n += 1
+                for i in range(self.total_beads, self.body_beads+1, -1): # ... though int sites ...
+                    mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(n, i, i-1))
+                    n += 1
+                mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(n, self.body_beads+1, 1)) # first site - first int
     

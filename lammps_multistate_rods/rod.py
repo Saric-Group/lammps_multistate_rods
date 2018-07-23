@@ -42,13 +42,13 @@ class Rod(object):
         '''
         self.state = new_state
         
-        new_atom_types = [int(atom_type) + self._sim.type_offset
-                          for atom_type in self._model.state_structures[self.state].replace('|','')]
+        new_atom_types = self._sim._state_types[new_state]
         
         for index, new_type in zip(self.atom_indices, new_atom_types):
             self._sim._all_atom_types[index] = new_type
         
         self._sim.py_lmp.lmp.scatter_atoms("type", 0, 1, self._sim._all_atom_types)
+        self._sim._reset_active_beads_group()
     
     def _get_positions(self):
         #TODO

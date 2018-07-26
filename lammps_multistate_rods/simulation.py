@@ -1,8 +1,8 @@
 # encoding: utf-8
 '''
-This module contains the description of a model for multi-state _rods
+This module contains the description of a model for multi-state rods
 as multi-bead molecules in LAMMPS and the tools necessary for using
-it in simulations where the _rods dynamically change their state.
+it in simulations where the rods dynamically change their state.
 
 In order to use the model properly one has to call the "init" method with
 a fresh instance of LAMMPS, before any other LAMMPS commands are called.
@@ -99,7 +99,7 @@ class Simulation(object):
         self.py_lmp.pair_modify("pair", self.model.int_type[0], "shift yes")
         
         #TODO use "extra_bond_styles"; explain in docstring...
-        self.py_lmp.bond_style("zero")
+        self.py_lmp.bond_style("hybrid", "zero")
         
         #TODO use "bond_offset" & "**kwargs"
         self.py_lmp.create_box(type_offset + self.model.max_bead_type, box, "bond/types", 1,
@@ -138,8 +138,7 @@ class Simulation(object):
         
         self.particle_offset = self.py_lmp.lmp.get_natoms() #number of atoms before the creation of rods
         
-        #TODO how does this work for hybrid bond_style ??
-        self.py_lmp.bond_coeff("*")
+        self.py_lmp.bond_coeff(self.bond_offset + 1, 'zero')
         
         rod_type_range = "{:d}*{:d}".format(self.type_offset + 1, self.type_offset + self.model.max_bead_type)
     
@@ -183,7 +182,7 @@ class Simulation(object):
             self._state_types.append([int(atom_type) + self.type_offset for atom_type in state_structure.replace('|','')])
         
         # create & populate LAMMPS groups (and setup cluster tracking)
-        self.py_lmp.group(Simulation.rods_group, "id >", self.particle_offset) # contains all _rods, regardless of state
+        self.py_lmp.group(Simulation.rods_group, "id >", self.particle_offset) # contains all rods, regardless of state
         if self.cluster_tracking:
             self.py_lmp.group(Simulation.active_beads_group, "type", self._active_bead_types) # contains all active beads of all rods
             if "cluster_cutoff" in kwargs.keys():
@@ -222,7 +221,7 @@ class Simulation(object):
     
     def set_rod_dynamics(self, ensemble = "", **kwargs):
         '''
-        Sets a "rigid/<ensemble>/small" integrator for all the _rods (default is just "rigid/small")
+        Sets a "rigid/<ensemble>/small" integrator for all the rods (default is just "rigid/small")
         
         Any additional LAMMPS "keyword" options (e.g. langevin, temp, iso etc.) can be passed as
         named arguments in the following form:
@@ -260,13 +259,13 @@ class Simulation(object):
 
     def rods_count(self):
         '''
-        Returns the overall number of _rods in the simulation.
+        Returns the overall number of rods in the simulation.
         '''
         return self._nrods
 
     def state_count(self, state_id):
         '''
-        Returns the number of _rods in the state given by ID.
+        Returns the number of rods in the state given by ID.
         '''
         return self._rod_counters[state_id]
 
@@ -310,7 +309,7 @@ class Simulation(object):
 
     def conformation_Monte_Carlo(self, ntries):
         '''
-        Tries to make "ntries" Monte Carlo conformation changes on randomly selected _rods that are
+        Tries to make "ntries" Monte Carlo conformation changes on randomly selected rods that are
         presumed to be equilibriated to the simulation temperature.
         
         returns : the number of accepted moves

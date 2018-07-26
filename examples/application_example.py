@@ -16,22 +16,22 @@ rods using the "lammps_multistate_rods" library.''', formatter_class=argparse.Ar
 parser.add_argument('config_file', help='path to the "lammps_multistate_rods" model config file')
 parser.add_argument('output_folder', help='name for the folder that will be created for output files')
 
+parser.add_argument('--seed', type=int, help='the seed for random number generators')
+
 parser.add_argument('-T', '--temp', default=1.0, type=float, help='the temperature of the system (e.g. for Langevin)')
 parser.add_argument('-D', '--damp', default=0.1, type=float, help='viscous damping (for Langevin)')
 parser.add_argument('-C', '--cell_size', default=10.0, type=float, help='size of an SC cell (i.e. room for one rod)')
 parser.add_argument('-N', '--num_cells', default=5.0, type=float, help='the number of cells per dimension')
-
 parser.add_argument('-S', '--sim_length', default=200000, type=int, help='the total number of MD steps to simulate')
 parser.add_argument('-R', '--run_length', default=200, type=int, help='number of MD steps between MC moves')
-parser.add_argument('-M', '--MC_moves', default=1.0, type=float, help='number of MC moves per rod between MD runs')
-parser.add_argument('--seed', type=int, help='the seed for random number generators')
+parser.add_argument('--MC_moves', default=1.0, type=float, help='number of MC moves per rod between MD runs')
+
+parser.add_argument('--no_ct', action='store_true', help="""disable LAMMPS cluster tracking (no cluster labels for active rod beads)""")
+parser.add_argument('--ct_cutoff', default=3.0, type=float, help='the max distance (in rod radii) for two rods to be in the same cluster')
 
 parser.add_argument('-o', '--output_freq', type=int, help='''configuration output frequency (in MD steps);
 default behavior is after every batch of MC moves''')
 parser.add_argument('-s', '--silent', action='store_true', help="doesn't print anything to stdout")
-
-#TODO add option for cluster_tracking
-cluster_tracking = True
 
 args = parser.parse_args()
 
@@ -69,7 +69,7 @@ simulation.setup("box")
 
 # CREATE PARTICLES
 # create other particles (and define their interactions etc.) before rods...
-simulation.create_rods(box = None, cluster_tracking = cluster_tracking, cluster_cutoff = 3.0*model.rod_radius)
+simulation.create_rods(box = None, cluster_tracking = not args.no_ct, cluster_cutoff = args.ct_cutoff*model.rod_radius)
 
 # DYNAMICS
 py_lmp.fix("thermostat", "all", "langevin", args.temp, args.temp, args.damp, args.seed)#, "zero yes")
@@ -80,7 +80,7 @@ py_lmp.neigh_modify("every 1 delay 3")
 # OUTPUT
 dump_path = os.path.join(args.output_folder, str(args.seed)+'.dump')
 dump_elems = "id x y z type mol"
-if cluster_tracking:
+if not args.no_ct:
     dump_elems += " c_"+simulation.cluster_compute
 if (args.output_freq != None):
     py_lmp.dump("dump_cmd", "all", "custom", args.output_freq, dump_path, dump_elems)

@@ -84,7 +84,28 @@ class Simulation(object):
     def setup(self, box, atom_style=None, type_offset=0, extra_pair_styles=None,
               bond_offset=0, extra_bond_styles=None, **kwargs):
         '''
-        TODO (explain arguments and expectations in detail)
+        This method sets-up the simulation box and all the styles, i.e. all the information
+        LAMMPS needs to create data structures for the simulation.
+        
+        box : the region ID to use in the "create_box" command
+        
+        atom_style : a string given verbatim to the LAMMPS "atom_style" command; if not given
+        "atom_style molecular" is used
+        
+        type_offset : the number of particle types that will be used for non-rod particles
+        
+        extra_pair_styles : an iterable consisted of pair style names and parameters needed to
+        define the, in LAMMPS, e.g. ("lj/cut", 3.0, "lj/long/dipole/long", "cut", "long", 5.0, ...)
+        WARNING: don't use the same style as given in the config file!
+        
+        bond_offset : the number of bond types that will be used for non-rod particles
+        
+        extra_bond_styles : an iterable consisted of bond style names and parameters needed to
+        define them in LAMMPS, e.g. ("harmonic", "fene", ...)
+        NOTE: style "zero" is already defined by default
+        
+        kwargs : any LAMMPS "create_box" command keyword is allowed here and all of it will be given
+        to the said command as "key value"
         '''
         if atom_style is None:
             atom_style = "molecular"
@@ -93,17 +114,25 @@ class Simulation(object):
         self.type_offset = type_offset
         self.bond_offset = bond_offset
         
-        #TODO use "extra_pair_styles", explain in docstring (tell they need to define everything else outside...)
-        # also, warn user not to use the same as in the config file (will cause errors)
-        self.py_lmp.pair_style("hybrid", self.model.int_type[0], self.model.global_cutoff)
-        self.py_lmp.pair_modify("pair", self.model.int_type[0], "shift yes")
+        self.py_lmp.pair_style('hybrid', self.model.int_type[0], self.model.global_cutoff,
+                                ' '.join(map(str, extra_pair_styles)))
+        self.py_lmp.pair_modify('pair', self.model.int_type[0], 'shift yes')
         
-        #TODO use "extra_bond_styles"; explain in docstring...
-        self.py_lmp.bond_style("hybrid", "zero")
+        self.py_lmp.bond_style('hybrid', 'zero', ' '.join(map(str, extra_bond_styles)))
         
-        #TODO use "bond_offset" & "**kwargs"
-        self.py_lmp.create_box(type_offset + self.model.max_bead_type, box, "bond/types", 1,
-                  "extra/bond/per/atom", 2, "extra/special/per/atom", 6)
+        try:
+            kwargs['extra/bond/per/atom'] = int(kwargs['extra/bond/per/atom']) + 2
+        except KeyError:
+            kwargs['extra/bond/per/atom'] = 2
+        try:
+            kwargs['extra/special/per/atom'] = int(kwargs['extra/special/per/atom']) + 6
+        except KeyError:
+            kwargs['extra/special/per/atom'] = 6
+        create_box_args = []
+        for key, value in kwargs.iteritems():
+            create_box_args.append('{} {}'.format(key, value))
+        self.py_lmp.create_box(type_offset + self.model.max_bead_type, box, "bond/types", 1 + bond_offset,
+                                ' '.join(create_box_args))
         
         for state_name in self.model.rod_states:
             self.py_lmp.molecule(state_name, os.path.join(self.output_dir, state_name+'.mol'))

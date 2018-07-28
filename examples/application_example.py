@@ -64,8 +64,8 @@ py_lmp.lattice("sc", 1./(args.cell_size**3))
 box_size = float(args.num_cells)
 py_lmp.region("box", "block", -box_size / 2, box_size / 2, -box_size / 2, box_size / 2, -box_size / 2, box_size / 2)
 
-#TODO show options
-simulation.setup("box")
+# SETUP SIMULATION (styles and box) 
+simulation.setup("box") # a lot of customisation options available here
 
 # CREATE PARTICLES
 # create other particles (and define their interactions etc.) before rods...
@@ -75,7 +75,7 @@ simulation.create_rods(box = None, cluster_tracking = not args.no_ct, cluster_cu
 py_lmp.fix("thermostat", "all", "langevin", args.temp, args.temp, args.damp, args.seed)#, "zero yes")
 simulation.set_rod_dynamics("nve")
 
-py_lmp.neigh_modify("every 1 delay 3")
+#py_lmp.neigh_modify("every 1 delay 5")
 
 # OUTPUT
 dump_path = os.path.join(args.output_folder, str(args.seed)+'.dump')

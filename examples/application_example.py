@@ -26,8 +26,8 @@ parser.add_argument('-S', '--sim_length', default=200000, type=int, help='the to
 parser.add_argument('-R', '--run_length', default=200, type=int, help='number of MD steps between MC moves')
 parser.add_argument('--MC_moves', default=1.0, type=float, help='number of MC moves per rod between MD runs')
 
-parser.add_argument('--no_ct', action='store_true', help="""disable LAMMPS cluster tracking (no cluster labels for active rod beads)""")
-parser.add_argument('--ct_cutoff', default=3.0, type=float, help='the max distance (in rod radii) for two rods to be in the same cluster')
+parser.add_argument('--clusters', default=3.0, type=float, help='the max distance (in rod radii) for two rods to be \
+in the same cluster (put to 0.0 to turn cluster tracking off)')
 
 parser.add_argument('-o', '--output_freq', type=int, help='''configuration output frequency (in MD steps);
 default behavior is after every batch of MC moves''')
@@ -54,7 +54,8 @@ log_path = os.path.join(args.output_folder, 'lammps.log')
 
 py_lmp = PyLammps(cmdargs=['-screen','none'])
 model = rods.Model(args.config_file)
-simulation = rods.Simulation(py_lmp, model, args.seed, args.temp, args.output_folder, log_path)
+simulation = rods.Simulation(py_lmp, model, args.seed, args.temp, args.output_folder,
+                             log_path, clusters=args.clusters)
 
 # various things to optionally set/define in LAMMPS
 py_lmp.units("lj")
@@ -68,8 +69,10 @@ py_lmp.region("box", "block", -box_size / 2, box_size / 2, -box_size / 2, box_si
 simulation.setup("box") # a lot of customisation options available here
 
 # CREATE PARTICLES
-# create other particles (and define their interactions etc.) before rods...
-simulation.create_rods(box = None, cluster_tracking = not args.no_ct, cluster_cutoff = args.ct_cutoff*model.rod_radius)
+#create other particles (and define their interactions etc.) before rods...
+# -> this can be done through the "read_data" command using the "add" keyword
+simulation.create_rods(box = None)
+#the above method can be called multiple times, i.e. rods don't have to be create all at once
 
 # DYNAMICS
 py_lmp.fix("thermostat", "all", "langevin", args.temp, args.temp, args.damp, args.seed)#, "zero yes")
@@ -80,7 +83,7 @@ simulation.set_rod_dynamics("nve")
 # OUTPUT
 dump_path = os.path.join(args.output_folder, str(args.seed)+'.dump')
 dump_elems = "id x y z type mol"
-if not args.no_ct:
+if args.clusters > 0.0:
     dump_elems += " c_"+simulation.cluster_compute
 if (args.output_freq != None):
     py_lmp.dump("dump_cmd", "all", "custom", args.output_freq, dump_path, dump_elems)

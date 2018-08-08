@@ -34,7 +34,7 @@ class Model(object):
         int_bulge_out = 0.1*rod_radius #default
         rod_mass = 1.0 #default
         # INTERACTION PROPERTIES (available to set in the config file)
-        int_type = None #example: ('morse', 2.5/rod_radius)
+        int_types = None #example: ('morse', 2.5/rod_radius)
         vol_exclusion = None #example: 10 (strength of bead/particle repulsion)
         int_range = 1.5*rod_radius #default (separation between bead/particle boundaries at which interaction =0)
         global_cutoff = 3.0*rod_radius #default
@@ -62,7 +62,7 @@ class Model(object):
                     num_states = len(rod_states)
                     state_structures = ['']*num_states
                 elif assign in ('rod_radius', 'body_bead_overlap', 'int_radius', 'int_bead_overlap', 'int_bulge_out',
-                                'rod_mass', 'int_type', 'vol_exclusion', 'int_range', 'global_cutoff'):
+                                'rod_mass', 'int_types', 'vol_exclusion', 'int_range', 'global_cutoff'):
                     exec(line)
                 elif re.compile(r'state_structures\[\d+\]').match(assign) != None:
                     exec(line)
@@ -89,7 +89,7 @@ class Model(object):
         self.active_bead_types = None #dependent on "state_structures" & "eps"
         self.max_bead_type = None #dependent on "state_structures"
         self.rod_mass = rod_mass
-        self.int_type = int_type
+        self.int_types = int_types
         self.vol_exclusion = vol_exclusion
         self.int_range = int_range
         self.global_cutoff = global_cutoff

@@ -88,23 +88,26 @@ class Simulation(object):
         self._rods = []
         self._rod_counters = [0]*model.num_states
     
-    def _set_pair_coeff(self, type_1, type_2, eps, sigma, cutoff):
+    def _set_pair_coeff(self, type_1, type_2, eps_val, sigma, cutoff):
         
-        if self.model.int_type[0] == 'lj/cut':
-            self.py_lmp.pair_coeff(type_1, type_2, self.model.int_type[0], eps*self.temp,
+        int_strength = eps_val[0]
+        int_type = self.model.int_types[eps_val[1]]
+        
+        if int_type[0] == 'lj/cut':
+            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], int_strength*self.temp,
                                    sigma/pow(2,1./6), cutoff)
-        elif self.model.int_type[0] == 'nm/cut':
-            self.py_lmp.pair_coeff(type_1, type_2, self.model.int_type[0], eps*self.temp,
-                                   sigma, self.model.int_type[1], self.model.int_type[2], cutoff)
-        elif self.model.int_type[0] == 'morse':
-            self.py_lmp.pair_coeff(type_1, type_2, self.model.int_type[0], eps*self.temp,
-                                   self.model.int_type[1], sigma, cutoff)
-        elif self.model.int_type[0] == 'gauss/cut':
-            H = -eps*sqrt(2*pi)*self.model.int_type[1]
-            self.py_lmp.pair_coeff(type_1, type_2, self.model.int_type[0], H*self.temp,
-                                   sigma, self.model.int_type[1], cutoff)
+        elif int_type[0] == 'nm/cut':
+            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], int_strength*self.temp,
+                                   sigma, int_type[1], int_type[2], cutoff)
+        elif int_type[0] == 'morse':
+            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], int_strength*self.temp,
+                                   int_type[1], sigma, cutoff)
+        elif int_type[0] == 'gauss/cut':
+            H = -int_strength*sqrt(2*pi)*int_type[1]
+            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], H*self.temp,
+                                   sigma, int_type[1], cutoff)
         else:
-            raise Exception('Unknown/invalid int_type parameter: '+ str(self.model.int_type))
+            raise Exception('Unknown/invalid int_type parameter: '+ str(int_type))
             
     def setup(self, box, atom_style=None, type_offset=0, extra_pair_styles=[],
               bond_offset=0, extra_bond_styles=[], **kwargs):
@@ -120,7 +123,7 @@ class Simulation(object):
         type_offset : the number of particle types that will be used for non-rod particles
         
         extra_pair_styles : an iterable consisted of pair style names and parameters needed to
-        define the, in LAMMPS, e.g. ("lj/cut", 3.0, "lj/long/dipole/long", "cut", "long", 5.0, ...)
+        define them in LAMMPS, e.g. ("lj/cut", 3.0, "lj/long/dipole/long", "cut", "long", 5.0, ...)
         WARNING: don't use the same style as given in the config file!
         
         bond_offset : the number of bond types that will be used for non-rod particles
@@ -144,9 +147,14 @@ class Simulation(object):
         if atom_style is None:
             atom_style = "molecular"
         self.py_lmp.atom_style(atom_style)
-        self.py_lmp.pair_style('hybrid', self.model.int_type[0], self.model.global_cutoff,
-                                ' '.join(map(str, extra_pair_styles)))
-        self.py_lmp.pair_modify('pair', self.model.int_type[0], 'shift yes')
+        
+        rod_pair_styles = [int_type[0] for int_type in self.model.int_types.values()]
+        self.py_lmp.pair_style('hybrid',
+                               ' '.join(map(lambda x : "{} {}".format(x, self.model.global_cutoff), rod_pair_styles)),
+                               ' '.join(map(str, extra_pair_styles)))
+        for rod_pair_style in rod_pair_styles:
+            self.py_lmp.pair_modify('pair', rod_pair_style, 'shift yes')
+        
         self.py_lmp.bond_style('hybrid', 'zero', ' '.join(map(str, extra_bond_styles)))
         
         # create box (with all the parameters)
@@ -177,7 +185,7 @@ class Simulation(object):
             
         # set interactions (initially all to 0 because of unused types)
         self._set_pair_coeff(rod_type_range, rod_type_range, 0.0, self.model.rod_radius, self.model.rod_radius)
-        for bead_types, epsilon in self.model.eps.iteritems():
+        for bead_types, eps_val in self.model.eps.iteritems():
             sigma = 0
             for bead_type in bead_types:
                 if bead_type in self.model.body_bead_types:
@@ -186,10 +194,10 @@ class Simulation(object):
                     sigma += self.model.int_radius
             type_1 = bead_types[0] + self.type_offset
             type_2 = bead_types[1] + self.type_offset
-            if epsilon == lammps_multistate_rods.model.vx:
+            if eps_val == lammps_multistate_rods.model.vx:
                 self._set_pair_coeff(type_1, type_2, self.model.vol_exclusion, sigma, sigma)
             else:
-                self._set_pair_coeff(type_1, type_2, epsilon, sigma, sigma + self.model.int_range)
+                self._set_pair_coeff(type_1, type_2, eps_val, sigma, sigma + self.model.int_range)
         
         self.py_lmp.bond_coeff(self.bond_offset + 1, 'zero')
         

@@ -109,7 +109,7 @@ class Simulation(object):
         else:
             raise Exception('Unknown/invalid int_type parameter: '+ str(int_type))
             
-    def setup(self, box, atom_style=None, type_offset=0, extra_pair_styles=[],
+    def setup(self, box, atom_style=None, type_offset=0, extra_pair_styles=[], overlay=False,
               bond_offset=0, extra_bond_styles=[], **kwargs):
         '''
         This method sets-up all the styles (atom, pair, bond), the simulation box and all the
@@ -125,6 +125,8 @@ class Simulation(object):
         extra_pair_styles : an iterable consisted of pair style names and parameters needed to
         define them in LAMMPS, e.g. ("lj/cut", 3.0, "lj/long/dipole/long", "cut", "long", 5.0, ...)
         WARNING: don't use the same style as given in the config file!
+        
+        overlay : if True the "hybrid/overlay" pair_style will be used, instead of the default "hybrid"
         
         bond_offset : the number of bond types that will be used for non-rod particles
         
@@ -149,7 +151,7 @@ class Simulation(object):
         self.py_lmp.atom_style(atom_style)
         
         rod_pair_styles = [int_type[0] for int_type in self.model.int_types.values()]
-        self.py_lmp.pair_style('hybrid',
+        self.py_lmp.pair_style('hybrid/overlay' if overlay else 'hybrid',
                                ' '.join(map(lambda x : "{} {}".format(x, self.model.global_cutoff), rod_pair_styles)),
                                ' '.join(map(str, extra_pair_styles)))
         for rod_pair_style in rod_pair_styles:
@@ -184,7 +186,8 @@ class Simulation(object):
             self.py_lmp.mass(bead_type + self.type_offset, self.model.rod_mass/self.model.body_beads)
             
         # set interactions (initially all to 0 because of unused types)
-        self._set_pair_coeff(rod_type_range, rod_type_range, 0.0, self.model.rod_radius, self.model.rod_radius)
+        self._set_pair_coeff(rod_type_range, rod_type_range, (0.0, self.model.int_types.keys()[0]),
+                             self.model.rod_radius, self.model.rod_radius)
         for bead_types, eps_val in self.model.eps.iteritems():
             sigma = 0
             for bead_type in bead_types:

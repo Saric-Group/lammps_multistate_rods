@@ -50,6 +50,9 @@ if args.seed is None:
     args.seed = int((time.time() % 1)*1000000)
     print "WARNING: no seed given explicitly; using:", args.seed
     
+dump_path = str(args.cell_size)+'-'+str(args.num_cells)+'_'+str(args.seed)+'.dump'
+dump_path = os.path.join(args.output_folder, dump_path)
+    
 log_path = os.path.join(args.output_folder, 'lammps.log')
 
 py_lmp = PyLammps(cmdargs=['-screen','none'])
@@ -78,10 +81,9 @@ simulation.create_rods(box = None)
 py_lmp.fix("thermostat", "all", "langevin", args.temp, args.temp, args.damp, args.seed)#, "zero yes")
 simulation.set_rod_dynamics("nve")
 
-#py_lmp.neigh_modify("every 1 delay 5")
+py_lmp.neigh_modify("every 1 delay 1")
 
 # OUTPUT
-dump_path = os.path.join(args.output_folder, str(args.seed)+'.dump')
 dump_elems = "id x y z type mol"
 if args.clusters > 0.0:
     dump_elems += " c_"+simulation.cluster_compute

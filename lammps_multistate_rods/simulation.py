@@ -54,7 +54,7 @@ class Simulation(object):
         log_path : LAMMPS will be set to write to this log file and the methods of this library
         will log useful information and hide a lot of useless ones (like the voluminous output of
         "conformation_Monte_Carlo"). If not given everything will be logged (danger of huge log
-        files)
+        files) to a file specified before (or the "log.lammps" default if not specified)
         
         clusters = <number> : the distance between bead centers that qualifies two beads (and
         consequently whole rods) to be in the same cluster. If it is > 0.0 a LAMMPS group will
@@ -210,16 +210,25 @@ class Simulation(object):
             self.py_lmp.compute(Simulation.cluster_compute, Simulation.active_beads_group, "aggregate/atom",
                                  self.clusters*self.model.rod_radius)
 
-    def create_rods(self, **kwargs):
+    def create_rods(self, state_ID=0, **kwargs):
         '''
-        This method creates the rods associates them with appropriate LAMMPS groups.
+        This method creates the rods (in the specified state) and associates them with
+        appropriate LAMMPS groups.
     
         The method supports specifying different ways of creating the rods by passing
         one of the following optional parameters:
         
-            box = None (DEFAULT)
-            region = (<region_ID>, seed) - seed is for initial random rotation of mols
-            random = (N, seed, <region_ID>)
+            box = None (DEFAULT) - creates them on a defined lattice
+            region = <region_ID> - creates them on a defined lattice only in the specified region
+            random = (N, seed, <region_ID>) - creates them on random locations in the specified region
+            file = <file_path> - creates them on locations and with rotations specified in the file;
+            the file has to have the following format:
+                monomers: N
+                <empty line>
+                <x> <y> <z> <angle> <Rx> <Ry> <Rz>
+                ...(N-1 more lines like above)...
+            where the <angle> should be in radians, and the Rs are components of a unit vector about
+            which to rotate, and whose origin is at the insertion point.
         
         IMPORTANT: This method should be called after the creation of all other
         non-rod particles, since the library expects rods to be created last. It can,
@@ -229,16 +238,27 @@ class Simulation(object):
             self.particle_offset = self.py_lmp.lmp.get_natoms() #number of atoms before the creation of first rods
         
         if "region" in kwargs.keys():
-            vals = kwargs['region']
-            self.py_lmp.create_atoms(self.type_offset, "region", vals[0],
-                                     "mol", self.model.rod_states[0], vals[1])
+            region_ID = kwargs['region']
+            self.py_lmp.create_atoms(self.type_offset, "region", region_ID,
+                                     "mol", self.model.rod_states[state_ID], self.seed)
         elif "random" in kwargs.keys():
             vals = kwargs['random']
             self.py_lmp.create_atoms(self.type_offset, "random", vals[0], vals[1], vals[2],
-                                     "mol", self.model.rod_states[0], vals[1])
+                                     "mol", self.model.rod_states[state_ID], self.seed)
+        if "file" in kwargs.keys():
+            filename = kwargs['file']
+            with open(filename, 'r') as rods_file:
+                N = int(rods_file.readline().split()[1])
+                rods_file.readline()
+                for i in range(N):
+                    vals = map(float, rods_file.readline().split())
+                    self.py_lmp.create_atoms(self.type_offset, "single", vals[0], vals[1], vals[2],
+                                             "mol", self.model.rod_states[state_ID], self.seed,
+                                             "rotate", vals[3], vals[4], vals[5], vals[6],
+                                             "units box")
         else:
             self.py_lmp.create_atoms(self.type_offset, "box",
-                                     "mol", self.model.rod_states[0], self.seed)
+                                     "mol", self.model.rod_states[state_ID], self.seed)
             
         self._all_atom_types = self.py_lmp.lmp.gather_atoms("type", 0, 1)
         

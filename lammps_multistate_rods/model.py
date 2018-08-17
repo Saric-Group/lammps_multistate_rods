@@ -31,7 +31,7 @@ class Model(object):
         body_bead_overlap = 1.0*rod_radius #default
         int_radius = 0.5*rod_radius #default
         int_bead_overlap = 0.0 #default
-        int_bulge_out = 0.1*rod_radius #default
+        int_bulge_out = 0.0 #default
         rod_mass = 1.0 #default
         # INTERACTION PROPERTIES (available to set in the config file)
         int_types = None #example: ('morse', 2.5/rod_radius)

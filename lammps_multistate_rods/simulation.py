@@ -109,13 +109,13 @@ class Simulation(object):
         else:
             raise Exception('Unknown/invalid int_type parameter: '+ str(int_type))
             
-    def setup(self, box, atom_style=None, type_offset=0, extra_pair_styles=[], overlay=False,
+    def setup(self, region_ID, atom_style=None, type_offset=0, extra_pair_styles=[], overlay=False,
               bond_offset=0, extra_bond_styles=[], **kwargs):
         '''
-        This method sets-up all the styles (atom, pair, bond), the simulation box and all the
+        This method sets-up all the styles (atom, pair, bond), the simulation region_ID and all the
         data need to simulate the rods (mass, coeffs, etc.).
         
-        box : the region ID to use in the "create_box" command
+        region_ID : the region ID to use in the "create_box" command
         
         atom_style : a string given verbatim to the LAMMPS "atom_style" command; if not given
         "atom_style molecular" is used
@@ -159,7 +159,7 @@ class Simulation(object):
         
         self.py_lmp.bond_style('hybrid', 'zero', ' '.join(map(str, extra_bond_styles)))
         
-        # create box (with all the parameters)
+        # create region_ID (with all the parameters)
         try:
             kwargs['extra/bond/per/atom'] = int(kwargs['extra/bond/per/atom']) + 2
         except KeyError:
@@ -171,7 +171,7 @@ class Simulation(object):
         create_box_args = []
         for key, value in kwargs.iteritems():
             create_box_args.append('{} {}'.format(key, value))
-        self.py_lmp.create_box(type_offset + self.model.max_bead_type, box, "bond/types", 1 + bond_offset,
+        self.py_lmp.create_box(type_offset + self.model.max_bead_type, region_ID, "bond/types", 1 + bond_offset,
                                 ' '.join(create_box_args))
         
         # load molecules from model files
@@ -245,7 +245,7 @@ class Simulation(object):
             vals = kwargs['random']
             self.py_lmp.create_atoms(self.type_offset, "random", vals[0], vals[1], vals[2],
                                      "mol", self.model.rod_states[state_ID], self.seed)
-        if "file" in kwargs.keys():
+        elif "file" in kwargs.keys():
             filename = kwargs['file']
             with open(filename, 'r') as rods_file:
                 N = int(rods_file.readline().split()[1])

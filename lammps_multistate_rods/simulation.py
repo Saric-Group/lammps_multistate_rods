@@ -96,6 +96,9 @@ class Simulation(object):
         if int_type[0] == 'lj/cut':
             self.py_lmp.pair_coeff(type_1, type_2, int_type[0], int_strength*self.temp,
                                    sigma/pow(2,1./6), cutoff)
+        elif int_type[0] == 'lj/cos_sq':
+            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], int_strength*self.temp,
+                                   sigma, cutoff)
         elif int_type[0] == 'nm/cut':
             self.py_lmp.pair_coeff(type_1, type_2, int_type[0], int_strength*self.temp,
                                    sigma, int_type[1], int_type[2], cutoff)
@@ -187,7 +190,7 @@ class Simulation(object):
             
         # set interactions (initially all to 0 because of unused types)
         self._set_pair_coeff(rod_type_range, rod_type_range, (0.0, self.model.int_types.keys()[0]),
-                             self.model.rod_radius, self.model.rod_radius)
+                             self.model.rod_radius, self.model.global_cutoff)
         for bead_types, eps_val in self.model.eps.iteritems():
             sigma = 0
             for bead_type in bead_types:

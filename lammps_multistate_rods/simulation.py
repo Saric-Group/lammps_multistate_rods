@@ -96,7 +96,7 @@ class Simulation(object):
         if int_type[0] == 'lj/cut':
             self.py_lmp.pair_coeff(type_1, type_2, int_type[0], int_strength*self.temp,
                                    sigma/pow(2,1./6), cutoff)
-        elif int_type[0] == 'lj/cos_sq':
+        elif int_type[0] == 'cosine/squared':
             self.py_lmp.pair_coeff(type_1, type_2, int_type[0], int_strength*self.temp,
                                    sigma, cutoff)
         elif int_type[0] == 'nm/cut':
@@ -153,12 +153,15 @@ class Simulation(object):
             atom_style = "molecular"
         self.py_lmp.atom_style(atom_style)
         
-        rod_pair_styles = [int_type[0] for int_type in self.model.int_types.values()]
-        self.py_lmp.pair_style('hybrid/overlay' if overlay else 'hybrid',
-                               ' '.join(map(lambda x : "{} {}".format(x, self.model.global_cutoff), rod_pair_styles)),
-                               ' '.join(map(str, extra_pair_styles)))
-        for rod_pair_style in rod_pair_styles:
-            self.py_lmp.pair_modify('pair', rod_pair_style, 'shift yes')
+        pair_styles = ['hybrid/overlay' if overlay else 'hybrid']
+        for int_type in self.model.int_types.values():
+            pair_styles.append('{:s} {:f}'.format(int_type[0], self.model.global_cutoff))
+            if int_type[0] == 'cosine/squared' and int_type[1] != None:
+                pair_styles.append(int_type[1])
+        pair_styles.append(' '.join(map(str, extra_pair_styles)))
+        self.py_lmp.pair_style(' '.join(pair_styles))
+        for int_type in self.model.int_types.values():
+            self.py_lmp.pair_modify('pair', int_type[0], 'shift yes')
         
         self.py_lmp.bond_style('hybrid', 'zero', ' '.join(map(str, extra_bond_styles)))
         

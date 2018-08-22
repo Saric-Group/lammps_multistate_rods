@@ -2,6 +2,8 @@
 '''
 This application does a simple NVE+Langevin LAMMPS simulation of spherocylinder-like rods
 (defined in a .cfg file) using the "lammps_multistate_rods" library.
+The initial locations of the rods are at SC lattice points defined by the input params, and
+their orientations are randomly determined at each insertion point.
 
 Created on 16 Mar 2018
 
@@ -15,18 +17,19 @@ rods using the "lammps_multistate_rods" library.''', formatter_class=argparse.Ar
 
 parser.add_argument('config_file', help='path to the "lammps_multistate_rods" model config file')
 parser.add_argument('output_folder', help='name for the folder that will be created for output files')
+parser.add_argument('cell_size', type=float, help='size of an SC cell (i.e. room for one rod)')
+parser.add_argument('num_cells', type=float, help='the number of cells per dimension')
+parser.add_argument('sim_length', type=int, help='the total number of MD steps to simulate')
 
 parser.add_argument('--seed', type=int, help='the seed for random number generators')
 
 parser.add_argument('-T', '--temp', default=1.0, type=float, help='the temperature of the system (e.g. for Langevin)')
 parser.add_argument('-D', '--damp', default=0.1, type=float, help='viscous damping (for Langevin)')
-parser.add_argument('-C', '--cell_size', default=10.0, type=float, help='size of an SC cell (i.e. room for one rod)')
-parser.add_argument('-N', '--num_cells', default=5.0, type=float, help='the number of cells per dimension')
-parser.add_argument('-S', '--sim_length', default=200000, type=int, help='the total number of MD steps to simulate')
+
 parser.add_argument('-R', '--run_length', default=200, type=int, help='number of MD steps between MC moves')
 parser.add_argument('--MC_moves', default=1.0, type=float, help='number of MC moves per rod between MD runs')
 
-parser.add_argument('--clusters', default=3.0, type=float, help='the max distance (in rod radii) for two rods to be \
+parser.add_argument('--clusters', default=2.5, type=float, help='the max distance (in rod radii) for two rods to be \
 in the same cluster (put to 0.0 to turn cluster tracking off)')
 
 parser.add_argument('-o', '--output_freq', type=int, help='''configuration output frequency (in MD steps);
@@ -53,7 +56,7 @@ if args.seed is None:
 dump_path = str(args.cell_size)+'-'+str(args.num_cells)+'_'+str(args.seed)+'.dump'
 dump_path = os.path.join(args.output_folder, dump_path)
     
-log_path = os.path.join(args.output_folder, 'lammps.log')
+log_path = os.path.join(args.output_folder, str(args.seed)+'_lammps.log')
 
 py_lmp = PyLammps(cmdargs=['-screen','none'])
 model = rods.Model(args.config_file)
@@ -64,9 +67,10 @@ simulation = rods.Simulation(py_lmp, model, args.seed, args.temp, args.output_fo
 py_lmp.units("lj")
 py_lmp.dimension(3)
 py_lmp.boundary("p p p")
-py_lmp.lattice("sc", 1./(args.cell_size**3))
-box_size = float(args.num_cells)
-py_lmp.region("box", "block", -box_size / 2, box_size / 2, -box_size / 2, box_size / 2, -box_size / 2, box_size / 2)
+py_lmp.lattice("sc", 1/(args.cell_size**3))
+py_lmp.region("box", "block", -args.num_cells / 2, args.num_cells / 2,
+                              -args.num_cells / 2, args.num_cells / 2,
+                              -args.num_cells / 2, args.num_cells / 2)
 
 # SETUP SIMULATION (styles and box) 
 simulation.setup("box") # a lot of customisation options available here

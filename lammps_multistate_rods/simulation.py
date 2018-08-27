@@ -160,8 +160,8 @@ class Simulation(object):
                 pair_styles.append(int_type[1])
         pair_styles.append(' '.join(map(str, extra_pair_styles)))
         self.py_lmp.pair_style(' '.join(pair_styles))
-        for int_type in self.model.int_types.values():
-            self.py_lmp.pair_modify('pair', int_type[0], 'shift yes')
+        #for int_type in self.model.int_types.values():
+        #    self.py_lmp.pair_modify('pair', int_type[0], 'shift yes')
         
         self.py_lmp.bond_style('hybrid', 'zero', ' '.join(map(str, extra_bond_styles)))
         

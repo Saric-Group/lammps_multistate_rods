@@ -88,10 +88,19 @@ class Simulation(object):
         self._rods = []
         self._rod_counters = [0]*model.num_states
     
-    def _set_pair_coeff(self, type_1, type_2, eps_val, sigma, cutoff):
+    def _set_pair_coeff(self, type_1, type_2, eps_val, sigma):
         
-        int_strength = eps_val[0]
-        int_type = self.model.int_types[eps_val[1]]
+        if eps_val == lammps_multistate_rods.model.vx:
+            int_strength = self.model.vol_exclusion[0]
+            int_type = self.model.int_types[self.model.vol_exclusion[1]]
+            cutoff = sigma
+        else:
+            int_strength = eps_val[0]
+            int_type = self.model.int_types[eps_val[1]]
+            if len(eps_val) > 2:
+                cutoff = sigma + eps_val[2]
+            else:
+                cutoff = sigma + self.model.global_range
         
         if int_type[0] == 'lj/cut':
             self.py_lmp.pair_coeff(type_1, type_2, int_type[0], int_strength*self.temp,
@@ -192,8 +201,7 @@ class Simulation(object):
             self.py_lmp.mass(bead_type + self.type_offset, self.model.rod_mass/self.model.body_beads)
             
         # set interactions (initially all to 0 because of unused types)
-        self._set_pair_coeff(rod_type_range, rod_type_range, (0.0, self.model.int_types.keys()[0]),
-                             self.model.rod_radius, self.model.global_cutoff)
+        self._set_pair_coeff(rod_type_range, rod_type_range, (0.0, self.model.int_types.keys()[0]), 1.0)
         for bead_types, eps_val in self.model.eps.iteritems():
             sigma = 0
             for bead_type in bead_types:
@@ -203,10 +211,7 @@ class Simulation(object):
                     sigma += self.model.int_radius
             type_1 = bead_types[0] + self.type_offset
             type_2 = bead_types[1] + self.type_offset
-            if eps_val == lammps_multistate_rods.model.vx:
-                self._set_pair_coeff(type_1, type_2, self.model.vol_exclusion, sigma, sigma)
-            else:
-                self._set_pair_coeff(type_1, type_2, eps_val, sigma, sigma + self.model.int_range)
+            self._set_pair_coeff(type_1, type_2, eps_val, sigma)
         
         self.py_lmp.bond_coeff(self.bond_offset + 1, 'zero')
         

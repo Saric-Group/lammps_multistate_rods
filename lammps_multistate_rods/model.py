@@ -36,8 +36,7 @@ class Model(object):
         # INTERACTION PROPERTIES (available to set in the config file)
         int_types = None #example: ('morse', 2.5/rod_radius)
         vol_exclusion = None #example: 10 (strength of bead/particle repulsion)
-        int_range = 1.5*rod_radius #default (separation between bead/particle boundaries at which interaction =0)
-        global_cutoff = 3.0*rod_radius #default
+        global_range = 1.5*rod_radius #default (separation between bead surfaces at which interaction =0)
         eps = {} # (interaction strengths between bead types)
             #example of elements:
             # eps[(1,1)] = eps[(1,2)] = eps[(1,3)] = eps[(1,4)] = vx
@@ -62,7 +61,7 @@ class Model(object):
                     num_states = len(rod_states)
                     state_structures = ['']*num_states
                 elif assign in ('rod_radius', 'body_bead_overlap', 'int_radius', 'int_bead_overlap', 'int_bulge_out',
-                                'rod_mass', 'int_types', 'vol_exclusion', 'int_range', 'global_cutoff'):
+                                'rod_mass', 'int_types', 'vol_exclusion', 'global_range'):
                     exec(line)
                 elif re.compile(r'state_structures\[\d+\]').match(assign) != None:
                     exec(line)
@@ -91,8 +90,8 @@ class Model(object):
         self.rod_mass = rod_mass
         self.int_types = int_types
         self.vol_exclusion = vol_exclusion
-        self.int_range = int_range
-        self.global_cutoff = global_cutoff
+        self.global_range = global_range
+        self.global_cutoff = global_range + 2*rod_radius
         self.eps = eps
         self.trans_penalty = trans_penalty
     

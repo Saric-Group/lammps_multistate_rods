@@ -94,6 +94,8 @@ class Model(object):
         self.global_cutoff = global_range + 2*rod_radius
         self.eps = eps
         self.trans_penalty = trans_penalty
+        self.transitions = None #dependent on "trans_penalty";
+            # a list by state_ID of lists of (state_ID, penalty) pairs for all allowed transitions
     
         self._set_dependent_params()
     
@@ -103,6 +105,7 @@ class Model(object):
         but are derived from the essential information given by a user, specifically:
             - information contained in the string specification of the states (+ a consistency check)
             - the anti-symmetric partners in the "trans_penalty" matrix (trans_penalty[(n,m)] = -trans_penalty[(m,n)])
+            - the "transitions" list from the "trans_penalty" dictionary
         '''
         self.body_bead_types = set()
         self.int_bead_types = set()
@@ -131,8 +134,11 @@ class Model(object):
         #self.int_bead_overlap = 2 - ((self.body_beads - 2)*(2 - self.body_bead_overlap)*self.rod_radius)/((self.int_sites - 1)*self.int_radius)
     
         antisym_completion = {}
+        self.transitions = [[] for _ in range(self.num_states)]
         for (from_state, to_state), value in self.trans_penalty.iteritems():
             antisym_completion[(to_state, from_state)] = -value
+            self.transitions[from_state].append((to_state, value))
+            self.transitions[to_state].append((from_state, -value))
         self.trans_penalty.update(antisym_completion)
 
     def generate_mol_files(self, model_output_dir):

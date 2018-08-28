@@ -360,15 +360,16 @@ class Simulation(object):
         returns : (1, U_after) or (0, U_before)
         '''
         old_state = rod.state
-        new_state = (old_state + random.randrange(-1, 2, 2)) % self.model.num_states # cyclic, with certainty a try will be made
+        candidate_states = self.model.transitions[old_state]
+        new_state, penalty = candidate_states[random.randrange(0, len(candidate_states))] # certainty a try will be made
         rod.set_state(new_state)
     
         self.py_lmp.command('run 0 post no')
     
         U_after = self.total_pe()
-        accept_prob = exp(- (U_after - U_before)/self.temp - self.model.trans_penalty[(old_state,new_state)])
+        accept_prob = exp(-(U_after - U_before)/self.temp - penalty)
     
-        if (random.random() < accept_prob):
+        if (accept_prob > 1 or random.random() < accept_prob):
             self._rod_counters[old_state] -= 1
             self._rod_counters[new_state] += 1
             return (1, U_after)

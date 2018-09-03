@@ -1,14 +1,6 @@
 # encoding: utf-8
 '''
-This module contains the description of a model for multi-state rods
-as multi-bead molecules in LAMMPS and the tools necessary for using
-it in simulations where the rods dynamically change their state.
-
-In order to use the model properly one has to call the "init" method with
-a fresh instance of LAMMPS, before any other LAMMPS commands are called.
-
-The general description of a model is given in a configuration file that
-needs to be passed to the "init" method.
+TODO
 
 Created on 22 Mar 2018
 

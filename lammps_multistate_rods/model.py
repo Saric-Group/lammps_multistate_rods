@@ -1,5 +1,7 @@
 # encoding: utf-8
 '''
+TODO
+
 Created on 17 Jul 2018
 
 @author: Eugen Rožić
@@ -76,6 +78,7 @@ class Model(object):
         self.num_states = num_states
         self.state_structures = state_structures
         self.rod_radius = rod_radius
+        self.rod_length = None
         self.body_beads = None #dependent on "state_structures"
         self.body_bead_types = None #dependent on "state_structures"
         self.body_bead_overlap = body_bead_overlap
@@ -130,6 +133,8 @@ class Model(object):
             if epsilon != vx:
                 self.active_bead_types.update(bead_types)
         self.active_bead_types = list(self.active_bead_types)
+        
+        self.rod_length = self.body_beads*(2*self.rod_radius - self.body_bead_overlap) + self.body_bead_overlap 
     
         #self.int_bead_overlap = 2 - ((self.body_beads - 2)*(2 - self.body_bead_overlap)*self.rod_radius)/((self.int_sites - 1)*self.int_radius)
     
@@ -182,5 +187,5 @@ class Model(object):
                 for i in range(self.total_beads, self.body_beads+1, -1): # ... though int sites ...
                     mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(n, i, i-1))
                     n += 1
-                mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(n, self.body_beads+1, 1)) # first site - first int
+                mol_file.write("{:2d} 1 {:2d} {:2d}\n\n".format(n, self.body_beads+1, 1)) # first site - first int
     

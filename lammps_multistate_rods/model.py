@@ -31,14 +31,14 @@ class Model(object):
             # state_structures[1] = '1111111|444444' # '2' is active body type, '4' is active side-patch type
         rod_radius = 1.0 #default
         body_bead_overlap = 1.0*rod_radius #default
-        int_radius = 0.5*rod_radius #default
-        int_bead_overlap = 0.0 #default
+        int_radius = 0.25*rod_radius #default
+        int_bead_overlap = -2.0*int_radius #default
         int_bulge_out = 0.0 #default
         rod_mass = 1.0 #default
         # INTERACTION PROPERTIES (available to set in the config file)
         int_types = None #example: ('morse', 2.5/rod_radius)
         vol_exclusion = None #example: 10 (strength of bead/particle repulsion)
-        global_range = 1.5*rod_radius #default (separation between bead surfaces at which interaction =0)
+        global_range = 1.75*rod_radius #default (separation between bead surfaces at which interaction =0)
         eps = {} # (interaction strengths between bead types)
             #example of elements:
             # eps[(1,1)] = eps[(1,2)] = eps[(1,3)] = eps[(1,4)] = vx

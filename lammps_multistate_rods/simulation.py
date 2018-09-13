@@ -80,36 +80,27 @@ class Simulation(object):
         self._rods = []
         self._rod_counters = [0]*model.num_states
     
-    def _set_pair_coeff(self, type_1, type_2, eps_val, sigma):
+    def _set_pair_coeff(self, type_1, type_2, (eps, int_type_key), sigma):
         
-        if eps_val == lammps_multistate_rods.model.vx:
-            int_strength = self.model.vol_exclusion[0]
-            int_type = self.model.int_types[self.model.vol_exclusion[1]]
-            cutoff = sigma
-        else:
-            int_strength = eps_val[0]
-            int_type = self.model.int_types[eps_val[1]]
-            if len(eps_val) > 2:
-                cutoff = sigma + eps_val[2]
-            else:
-                cutoff = sigma + self.model.global_range
+        int_type = self.model.int_types[int_type_key]
         
         if int_type[0] == 'lj/cut':
-            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], int_strength*self.temp,
-                                   sigma/pow(2,1./6), cutoff)
+            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], eps*self.temp,
+                                   sigma/pow(2,1./6), sigma+int_type[1])
         elif int_type[0] == 'cosine/squared':
-            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], int_strength*self.temp,
-                                   sigma, cutoff)
+            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], eps*self.temp,
+                                   sigma, sigma+int_type[1],
+                                   int_type[2] if len(int_type)==3 else "")
         elif int_type[0] == 'nm/cut':
-            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], int_strength*self.temp,
-                                   sigma, int_type[1], int_type[2], cutoff)
+            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], eps*self.temp,
+                                   sigma, int_type[1], int_type[2], sigma+int_type[3])
         elif int_type[0] == 'morse':
-            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], int_strength*self.temp,
-                                   int_type[1], sigma, cutoff)
+            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], eps*self.temp,
+                                   int_type[1], sigma, sigma+int_type[2])
         elif int_type[0] == 'gauss/cut':
-            H = -int_strength*sqrt(2*pi)*int_type[1]
+            H = -eps*sqrt(2*pi)*int_type[1]
             self.py_lmp.pair_coeff(type_1, type_2, int_type[0], H*self.temp,
-                                   sigma, int_type[1], cutoff)
+                                   sigma, int_type[1], sigma+int_type[2])
         else:
             raise Exception('Unknown/invalid int_type parameter: '+ str(int_type))
             
@@ -155,10 +146,8 @@ class Simulation(object):
         self.py_lmp.atom_style(atom_style)
         
         pair_styles = ['hybrid/overlay' if overlay else 'hybrid']
-        for int_type in self.model.int_types.values():
-            pair_styles.append('{:s} {:f}'.format(int_type[0], self.model.global_cutoff))
-            if int_type[0] == 'cosine/squared' and int_type[1] != None:
-                pair_styles.append(int_type[1])
+        for pair_style in set([int_type[0] for int_type in self.model.int_types.values()]):
+            pair_styles.append('{:s} {:f}'.format(pair_style, self.model.global_cutoff))
         pair_styles.append(' '.join(map(str, extra_pair_styles)))
         self.py_lmp.pair_style(' '.join(pair_styles))
         #for int_type in self.model.int_types.values():

@@ -9,7 +9,7 @@ Created on 17 Jul 2018
 
 import os, re
 
-vx = 'vx' #constant (for labeling vol_exclusion interaction)
+vx = 'vx'
 
 class Model(object):
     '''
@@ -23,56 +23,66 @@ class Model(object):
 
     def __init__(self, config_file_path):
         # ROD PROPERTIES (available to set in the config file)
-        rod_states = None #example: ('base_state', 'beta_state')
+        rod_states = None #example: ('soluble_state', 'beta_state')
         num_states = None #dependent on "rod_states"
         state_structures = None #dependent on "rod_states"
             #example of elements:
-            # state_structures[0] = '1111112|333333' # '1' is inert body type, '3' is inert side-patch type
-            # state_structures[1] = '1111111|444444' # '2' is active body type, '4' is active side-patch type
+            # state_structures[0] = '111112|333' # '1' is inert body type, '3' is inert side-patch type
+            # state_structures[1] = '111111|444' # '2' is active body type, '4' is active side-patch type
         rod_radius = 1.0 #default
-        body_bead_overlap = 1.0*rod_radius #default
+        body_bead_overlap = 0.8*rod_radius #default
         int_radius = 0.25*rod_radius #default
-        int_bead_overlap = -2.0*int_radius #default
+        int_bead_overlap = -7.6*int_radius #default
         int_bulge_out = 0.0 #default
         rod_mass = 1.0 #default
         # INTERACTION PROPERTIES (available to set in the config file)
-        int_types = None #example: ('morse', 2.5/rod_radius)
-        vol_exclusion = None #example: 10 (strength of bead/particle repulsion)
-        global_range = 1.75*rod_radius #default (separation between bead surfaces at which interaction =0)
-        eps = {} # (interaction strengths between bead types)
+        int_types = None # interaction types (with parameters)
+            #example:
+            # int_types = {'patch':('cosine/squared', 1.75*rod_radius),
+            #              'tip':('cosine/squared', 1.0*rod_radius, 'wca'),
+            #              'vx':('lj/cut', 0.0)}
+        eps = {} # interaction strengths between bead types
             #example of elements:
-            # eps[(1,1)] = eps[(1,2)] = eps[(1,3)] = eps[(1,4)] = vx
-            # eps[(2,3)] = eps[(3,3)] = eps[(3,4)] = vx
-            # eps[(2,2)] = 5.5 # base-base interaction
-            # eps[(2,4)] = 5.75 # base-beta interaction
-            # eps[(4,4)] = 6.0 # beta-beta interaction
-        trans_penalty = {} # (transition penalties between states)
+            # eps[(1,1)] = eps[(1,2)] = eps[(1,3)] = eps[(1,4)] = (5.0, 'vx')
+            # eps[(2,3)] = eps[(3,3)] = eps[(3,4)] = (5.0, 'vx')
+            # eps[(2,2)] = (3.25, 'tip') # soluble-soluble tip interaction
+            # eps[(2,4)] = (6.5, 'patch') # soluble-beta interaction
+            # eps[(4,4)] = (30.0, 'patch') # beta-beta interaction
+        trans_penalty = {} # transition penalties between states
             #example of elements:
-            # trans_penalty[(0,1)] = 15.0 (base to beta state transition)
+            # trans_penalty[(0,1)] = 15.0 # soluble-beta transition
             
         with open(config_file_path,'r') as config_file:
+            command = ''
             for line in config_file:
                 line = line.strip()
-                if (line.startswith('#') or line == ''):
+                if line.startswith('#') or line == '':
+                    if command == '':
+                        continue
+                    else:
+                        raise Exception('ERROR: comment or empty line in the middle of a multi-line command!')
+                command += line
+                if line.endswith(','):
                     continue
-                parts = line.split('=')
+                parts = command.split('=')
                 assign = parts[0].strip()
                 expr = parts[1].strip()
                 if assign == 'rod_states':
                     rod_states = eval(expr)
                     num_states = len(rod_states)
                     state_structures = ['']*num_states
-                elif assign in ('rod_radius', 'body_bead_overlap', 'int_radius', 'int_bead_overlap', 'int_bulge_out',
-                                'rod_mass', 'int_types', 'vol_exclusion', 'global_range'):
-                    exec(line)
+                elif assign in ('rod_radius', 'body_bead_overlap', 'int_radius', 'int_bead_overlap',
+                                'int_bulge_out', 'rod_mass', 'int_types'):
+                    exec(command)
                 elif re.compile(r'state_structures\[\d+\]').match(assign) != None:
-                    exec(line)
+                    exec(command)
                 elif re.compile(r'eps\[\(\d+,\d+\)\]').match(assign) != None:
-                    exec(line)
+                    exec(command)
                 elif re.compile(r'trans_penalty\[\(\d+,\d+\)\]').match(assign) != None:
-                    exec(line)
+                    exec(command)
                 else:
                     raise Exception('ERROR: Unknown config parameter encountered (' + line + ')')
+                command = ''
         
         self.rod_states = rod_states
         self.num_states = num_states
@@ -92,9 +102,7 @@ class Model(object):
         self.max_bead_type = None #dependent on "state_structures"
         self.rod_mass = rod_mass
         self.int_types = int_types
-        self.vol_exclusion = vol_exclusion
-        self.global_range = global_range
-        self.global_cutoff = global_range + 2*rod_radius
+        self.global_cutoff = 3*rod_radius
         self.eps = eps
         self.trans_penalty = trans_penalty
         self.transitions = None #dependent on "trans_penalty";
@@ -130,13 +138,11 @@ class Model(object):
         self.max_bead_type = max((max(self.body_bead_types), max(self.int_bead_types)))
         self.active_bead_types = set()
         for bead_types, epsilon in self.eps.iteritems():
-            if epsilon != vx:
+            if epsilon[1] != vx:
                 self.active_bead_types.update(bead_types)
         self.active_bead_types = list(self.active_bead_types)
         
         self.rod_length = self.body_beads*(2*self.rod_radius - self.body_bead_overlap) + self.body_bead_overlap 
-    
-        #self.int_bead_overlap = 2 - ((self.body_beads - 2)*(2 - self.body_bead_overlap)*self.rod_radius)/((self.int_sites - 1)*self.int_radius)
     
         antisym_completion = {}
         self.transitions = [[] for _ in range(self.num_states)]

@@ -121,7 +121,7 @@ else:
         if not args.silent:
             base_count = simulation.state_count(0)
             beta_count = simulation.state_count(1)
-            print 'step {:d} / {:d} :  beta-to-base ratio = {:d}/{:d} = {:.5f} (accept rate = {:.5f})'.format(
+            print 'step {:d} / {:d} :  beta-to-soluble ratio = {:d}/{:d} = {:.5f} (accept rate = {:.5f})'.format(
                     (i+1)*args.run_length, args.sim_length, beta_count, base_count,
                         float(beta_count)/base_count, float(success)/mc_moves_per_run)
             

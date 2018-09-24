@@ -266,7 +266,7 @@ class Simulation(object):
         for i in range(rods_before, self._nrods):
             rod_start_index = self.particle_offset + i * self.model.total_beads
             rod_atom_indices = range(rod_start_index, rod_start_index + self.model.total_beads)
-            self._rods.append(lammps_multistate_rods.Rod(self, i+1, rod_atom_indices))
+            self._rods.append(lammps_multistate_rods.Rod(self, i+1, rod_atom_indices, state_ID))
         self._rod_counters[state_ID] += new_rods
     
     def set_rod_dynamics(self, ensemble = "", **kwargs):

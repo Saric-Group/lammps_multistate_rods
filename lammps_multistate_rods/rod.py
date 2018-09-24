@@ -16,22 +16,19 @@ class Rod(object):
     lammps_multistate_rods.simulation.Simulation.
     '''
     
-    def __init__(self, simulation, mol_id, atom_indices):
+    def __init__(self, simulation, mol_id, atom_indices, state = None):
         self._sim = simulation
         self._model = simulation.model
         self.id = mol_id
         self.atom_indices = atom_indices
-        self._determine_state()
+        self.state = state
+        if state == None:
+            self._determine_state()
     
     def _determine_state(self):
-        self.state = None
-        rod_body_beads = ''.join(str(self._sim._all_atom_types[index] - self._sim.type_offset) 
-                                 for index in self.atom_indices[:self._model.body_beads])
-        rod_int_beads = ''.join(str(self._sim._all_atom_types[index] - self._sim.type_offset)
-                                for index in self.atom_indices[self._model.body_beads:])
-        rod_bead_types = rod_body_beads + '|' + rod_int_beads
+        curr_state_types = [self._sim._all_atom_types[index] for index in self.atom_indices]
         for state in range(self._model.num_states):
-            if (self._model.state_structures[state] == rod_bead_types):
+            if (self._sim._state_types[state] == curr_state_types):
                 self.state = state
         if (self.state == None):
             raise Exception("Non-existing rod state encountered!")

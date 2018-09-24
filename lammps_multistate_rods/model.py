@@ -91,10 +91,11 @@ class Model(object):
         self.num_states = num_states
         self.state_structures = state_structures
         self.rod_radius = rod_radius
-        self.rod_length = None
+        self.rod_length = None #dependent on "state_structures"
         self.body_beads = None #dependent on "state_structures"
         self.body_bead_types = None #dependent on "state_structures"
         self.body_bead_overlap = body_bead_overlap
+        self.num_patches = None #dependent on "state_structures"
         self.patch_angles = patch_angles
         self.patch_bead_radius = patch_bead_radius
         self.patch_beads = None #dependent on "state_structures"
@@ -123,7 +124,6 @@ class Model(object):
             - the "transitions" list from the "trans_penalty" dictionary
         '''
         self.body_bead_types = set()
-        self.patch_bead_types = set()
         for state_struct in self.state_structures: #check all have the same "form"
             parts = state_struct.split('|')
             
@@ -138,22 +138,23 @@ class Model(object):
                 self.patch_beads = map(len, parts[1:])
             elif map(len, parts[1:]) != self.patch_beads:
                 raise Exception('All states must have the same number of patch int sites!')
-            for patch in parts[1:]:
-                for patch_bead_type in patch:
-                    self.patch_bead_types.add(int(patch_bead_type))
+            if self.patch_bead_types == None:
+                self.patch_bead_types = [set() for _ in range(1, len(parts))]
+            for i in range(1, len(parts)):
+                for patch_bead_type in parts[i]:
+                    self.patch_bead_types[i-1].add(int(patch_bead_type))
             
         if len(self.patch_angles) != len(self.patch_beads):
             raise Exception("The number of patch angles doesn't match the number of defined patches!")
+        else:
+            self.num_patches = len(self.patch_angles)
                     
         self.total_beads = self.body_beads + sum(self.patch_beads)
-        self.body_bead_types = list(self.body_bead_types)
-        self.patch_bead_types = list(self.patch_bead_types)
         self.max_bead_type = max((max(self.body_bead_types), max(self.patch_bead_types)))
         self.active_bead_types = set()
         for bead_types, epsilon in self.eps.iteritems():
             if epsilon[1] != vx:
                 self.active_bead_types.update(bead_types)
-        self.active_bead_types = list(self.active_bead_types)
         
         self.rod_length = self.body_beads*(2*self.rod_radius - self.body_bead_overlap) + self.body_bead_overlap 
     

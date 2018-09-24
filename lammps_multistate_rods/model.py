@@ -8,6 +8,7 @@ Created on 17 Jul 2018
 '''
 
 import os, re
+from math import cos, sin, pi
 
 vx = 'vx'
 
@@ -27,13 +28,14 @@ class Model(object):
         num_states = None #dependent on "rod_states"
         state_structures = None #dependent on "rod_states"
             #example of elements:
-            # state_structures[0] = '111112|333' # '1' is inert body type, '3' is inert side-patch type
-            # state_structures[1] = '111111|444' # '2' is active body type, '4' is active side-patch type
+            # state_structures[0] = '111111112|3333' # '1' is inert body type, '3' is inert side-patch type
+            # state_structures[1] = '111111111|4444' # '2' is active body type, '4' is active side-patch type
         rod_radius = 1.0 #default
-        body_bead_overlap = 0.8*rod_radius #default
-        int_radius = 0.25*rod_radius #default
-        int_bead_overlap = -7.6*int_radius #default
-        int_bulge_out = 0.0 #default
+        body_bead_overlap = 1.25*rod_radius #default
+        patch_angles = (0.0,)
+        patch_bead_radius = 0.25*rod_radius #default
+        patch_bead_overlap = -3.5*patch_bead_radius #default
+        patch_bulge_out = 0.0 #default
         rod_mass = 1.0 #default
         # INTERACTION PROPERTIES (available to set in the config file)
         int_types = None # interaction types (with parameters)
@@ -71,8 +73,9 @@ class Model(object):
                     rod_states = eval(expr)
                     num_states = len(rod_states)
                     state_structures = ['']*num_states
-                elif assign in ('rod_radius', 'body_bead_overlap', 'int_radius', 'int_bead_overlap',
-                                'int_bulge_out', 'rod_mass', 'int_types'):
+                elif assign in ('rod_radius', 'body_bead_overlap', 'rod_mass',
+                                'patch_angles', 'patch_bead_radius', 'patch_bead_overlap',
+                                'patch_bulge_out', 'int_types'):
                     exec(command)
                 elif re.compile(r'state_structures\[\d+\]').match(assign) != None:
                     exec(command)
@@ -92,11 +95,12 @@ class Model(object):
         self.body_beads = None #dependent on "state_structures"
         self.body_bead_types = None #dependent on "state_structures"
         self.body_bead_overlap = body_bead_overlap
-        self.int_radius = int_radius
-        self.int_sites = None #dependent on "state_structures"
-        self.int_bead_types = None #dependent on "state_structures"
-        self.int_bead_overlap = int_bead_overlap
-        self.int_bulge_out = int_bulge_out
+        self.patch_angles = patch_angles
+        self.patch_bead_radius = patch_bead_radius
+        self.patch_beads = None #dependent on "state_structures"
+        self.patch_bead_types = None #dependent on "state_structures"
+        self.patch_bead_overlap = patch_bead_overlap
+        self.patch_bulge_out = patch_bulge_out
         self.total_beads = None #dependent on "state_structures"
         self.active_bead_types = None #dependent on "state_structures" & "eps"
         self.max_bead_type = None #dependent on "state_structures"
@@ -119,23 +123,32 @@ class Model(object):
             - the "transitions" list from the "trans_penalty" dictionary
         '''
         self.body_bead_types = set()
-        self.int_bead_types = set()
-        self.body_beads = len(self.state_structures[0].split('|')[0])
-        self.int_sites = len(self.state_structures[0].split('|')[1])
-        for state_struct in self.state_structures: #check all have same "form"
-            temp1, temp2 = state_struct.split('|')
-            if len(temp1) != self.body_beads:
+        self.patch_bead_types = set()
+        for state_struct in self.state_structures: #check all have the same "form"
+            parts = state_struct.split('|')
+            
+            if self.body_beads == None:
+                self.body_beads = len(parts[0])
+            elif len(parts[0]) != self.body_beads:
                 raise Exception('All states must have the same number of body beads!')
-            if len(temp2) != self.int_sites:
-                raise Exception('All states must have the same number of interaction sites!')
-            for body_bead_type in temp1:
+            for body_bead_type in parts[0]:
                 self.body_bead_types.add(int(body_bead_type))
-            for int_bead_type in temp2:
-                self.int_bead_types.add(int(int_bead_type))
-        self.total_beads = self.body_beads + self.int_sites
+            
+            if self.patch_beads == None:
+                self.patch_beads = map(len, parts[1:])
+            elif map(len, parts[1:]) != self.patch_beads:
+                raise Exception('All states must have the same number of patch int sites!')
+            for patch in parts[1:]:
+                for patch_bead_type in patch:
+                    self.patch_bead_types.add(int(patch_bead_type))
+            
+        if len(self.patch_angles) != len(self.patch_beads):
+            raise Exception("The number of patch angles doesn't match the number of defined patches!")
+                    
+        self.total_beads = self.body_beads + sum(self.patch_beads)
         self.body_bead_types = list(self.body_bead_types)
-        self.int_bead_types = list(self.int_bead_types)
-        self.max_bead_type = max((max(self.body_bead_types), max(self.int_bead_types)))
+        self.patch_bead_types = list(self.patch_bead_types)
+        self.max_bead_type = max((max(self.body_bead_types), max(self.patch_bead_types)))
         self.active_bead_types = set()
         for bead_types, epsilon in self.eps.iteritems():
             if epsilon[1] != vx:
@@ -169,29 +182,28 @@ class Model(object):
                 mol_file.write("{:d} bonds\n\n".format(self.total_beads))
                 
                 mol_file.write("Coords\n\n")
+                n = 1
                 for i in range(self.body_beads):
                     x = 0.0 - ((self.body_beads - 2*i - 1) / 2.)*(2*self.rod_radius - self.body_bead_overlap)
-                    mol_file.write("{:2d} {:6.3f}  0.000  0.000\n".format(i+1, x))
-                for i in range(self.int_sites):
-                    x = 0.0 - ((self.int_sites - 2*i - 1) / 2.)*(2*self.int_radius - self.int_bead_overlap)
-                    z = self.rod_radius - self.int_radius + self.int_bulge_out
-                    mol_file.write("{:2d} {:6.3f}  0.000 {:6.3f}\n".format(self.body_beads+i+1, x, z))
+                    mol_file.write("{:2d} {:6.3f}  0.000  0.000\n".format(n, x))
+                    n += 1
+                for k in range(len(self.patch_beads)):
+                    for i in range(self.patch_beads[k]):
+                        x = 0.0 - ((self.patch_beads[k] - 2*i - 1) / 2.)*(2*self.patch_bead_radius - self.patch_bead_overlap)
+                        d = self.rod_radius - self.patch_bead_radius + self.patch_bulge_out
+                        y = -sin(self.patch_angles[k]*2*pi/360)*d
+                        z = cos(self.patch_angles[k]*2*pi/360)*d
+                        mol_file.write("{:2d} {:6.3f} {:6.3f} {:6.3f}\n".format(n, x, y, z))
+                        n += 1
                 
                 mol_file.write("\nTypes\n\n")
-                for i in range(self.body_beads):
-                    mol_file.write("{:2d} {:s}\n".format(i+1, self.state_structures[state][i]))
-                for i in range(self.body_beads, self.total_beads):
-                    mol_file.write("{:2d} {:s}\n".format(i+1, self.state_structures[state][i+1]))
-                
-                mol_file.write("\nBonds\n\n") # cyclic bonds...
                 n = 1
-                for i in range(1, self.body_beads): # ... through body beads ...
-                    mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(n, i, i+1))
+                for bead_type in self.state_structures[state].replace('|',''):
+                    mol_file.write("{:2d} {:s}\n".format(n, bead_type))
                     n += 1
-                mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(n, self.body_beads, self.total_beads)) # last body - last int
-                n += 1
-                for i in range(self.total_beads, self.body_beads+1, -1): # ... though int sites ...
-                    mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(n, i, i-1))
-                    n += 1
-                mol_file.write("{:2d} 1 {:2d} {:2d}\n\n".format(n, self.body_beads+1, 1)) # first site - first int
+                
+                mol_file.write("\nBonds\n\n")
+                for i in range(1, self.total_beads):
+                    mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(i, i, i+1))
+                mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(self.total_beads, self.total_beads, 1))
     

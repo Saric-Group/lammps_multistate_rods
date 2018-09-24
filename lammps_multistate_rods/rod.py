@@ -47,7 +47,9 @@ class Rod(object):
             self._sim._all_atom_types[index] = new_type
         
         self._sim.py_lmp.lmp.scatter_atoms("type", 0, 1, self._sim._all_atom_types)
-        self._sim._reset_active_beads_group()
+        #self._sim._reset_active_beads_group()
+        # it would be consistent to have this here, but very inefficient...
+        # ...instead we can do it only if the new state is accepted (in _sim.try_state_change)
     
     def _get_positions(self):
         #TODO
@@ -81,8 +83,7 @@ class Rod(object):
         '''
         n = self._model.total_beads
         ids = [(index+1) for index in self.atom_indices]
-        types = [int(atom_type) + self._sim.type_offset
-                 for atom_type in self._model.state_structures[self.state].replace('|','')]
+        types = self._sim._state_types[self.state]
         xs = ((c_double * 3) * n)()
         vs = ((c_double * 3) * n)()
         for i in range(n):

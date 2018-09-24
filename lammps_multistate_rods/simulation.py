@@ -45,7 +45,7 @@ class Simulation(object):
         
         log_path : LAMMPS will be set to write to this log file and the methods of this library
         will log useful information and hide a lot of useless ones (like the voluminous output of
-        "conformation_Monte_Carlo"). If not given everything will be logged (danger of huge log
+        "state_change_MC"). If not given everything will be logged (danger of huge log
         files) to a file specified before (or the "log.lammps" default if not specified)
         
         clusters = <number> : the distance between bead centers that qualifies two beads (and
@@ -189,7 +189,7 @@ class Simulation(object):
                 if bead_type in self.model.body_bead_types:
                     sigma += self.model.rod_radius
                 else:
-                    sigma += self.model.int_radius
+                    sigma += self.model.patch_bead_radius
             type_1 = bead_types[0] + self.type_offset
             type_2 = bead_types[1] + self.type_offset
             self._set_pair_coeff(type_1, type_2, eps_val, sigma)
@@ -325,9 +325,9 @@ class Simulation(object):
         '''
         return self._rods[random.randrange(self._nrods)]
 
-    def try_conformation_change(self, rod, U_before):
+    def try_state_change(self, rod, U_before):
         '''
-        Tries an MC conformation change on the given rod. The change
+        Tries an MC state change on the given rod. The change
         is accepted with probability equal to:
             max{ exp(- delta_U - trans_penalty), 1}
         where:
@@ -353,15 +353,16 @@ class Simulation(object):
         if (accept_prob > 1 or random.random() < accept_prob):
             self._rod_counters[old_state] -= 1
             self._rod_counters[new_state] += 1
+            self._reset_active_beads_group()
             return (1, U_after)
         else:
             rod.set_state(old_state) # revert change back
             return (0, U_before)
 
-    def conformation_Monte_Carlo(self, ntries):
+    def state_change_MC(self, ntries):
         '''
-        Tries to make "ntries" Monte Carlo conformation changes on randomly selected rods that are
-        presumed to be equilibriated to the simulation temperature.
+        Tries to make "ntries" Monte Carlo state changes on randomly selected rods that are
+        presumed to be equilibrated to the simulation temperature.
         
         returns : the number of accepted moves
         '''
@@ -371,12 +372,12 @@ class Simulation(object):
         U_start = U_current = self.total_pe()
         success = 0
         for _ in range(ntries):
-            (acpt, U_current) = self.try_conformation_change(self.get_random_rod(), U_current)
+            (acpt, U_current) = self.try_state_change(self.get_random_rod(), U_current)
             success += acpt
     
         if self.log_path != None:
             self.py_lmp.log(self.log_path, 'append')
-            self.py_lmp.command('print "conformation_Monte_Carlo: {:d}/{:d} (delta_U = {:f})"'.format(
+            self.py_lmp.command('print "state_change_MC: {:d}/{:d} (delta_U = {:f})"'.format(
                                     success, ntries, U_start - U_current))
         return success
     

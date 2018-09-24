@@ -12,29 +12,44 @@ Created on 16 Mar 2018
 
 import argparse
 
-parser = argparse.ArgumentParser(description='''Program for NVE+Langevin hybrid LAMMPS simulation of spherocylinder-like 
-rods using the "lammps_multistate_rods" library.''', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser = argparse.ArgumentParser(description=
+                                 'Program for NVE+Langevin hybrid LAMMPS simulation of spherocylinder-like\
+rods using the "lammps_multistate_rods" library.',
+                                formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-parser.add_argument('config_file', help='path to the "lammps_multistate_rods" model config file')
-parser.add_argument('output_folder', help='name for the folder that will be created for output files')
-parser.add_argument('cell_size', type=float, help='size of an SC cell (i.e. room for one rod)')
-parser.add_argument('num_cells', type=float, help='the number of cells per dimension')
-parser.add_argument('sim_length', type=int, help='the total number of MD steps to simulate')
+parser.add_argument('config_file',
+                    help='path to the "lammps_multistate_rods" model config file')
+parser.add_argument('output_folder',
+                    help='name for the folder that will be created for output files')
+parser.add_argument('cell_size', type=float,
+                    help='size of an SC cell (i.e. room for one rod)')
+parser.add_argument('num_cells', type=float,
+                    help='the number of cells per dimension')
+parser.add_argument('sim_length', type=int,
+                    help='the total number of MD steps to simulate')
 
-parser.add_argument('--seed', type=int, help='the seed for random number generators')
+parser.add_argument('--seed', type=int,
+                    help='the seed for random number generators')
 
-parser.add_argument('-T', '--temp', default=1.0, type=float, help='the temperature of the system (e.g. for Langevin)')
-parser.add_argument('-D', '--damp', default=0.1, type=float, help='viscous damping (for Langevin)')
+parser.add_argument('-T', '--temp', default=4.0, type=float,
+                    help='the temperature of the system (e.g. for Langevin)')
+parser.add_argument('-D', '--damp', default=0.1, type=float,
+                    help='viscous damping (for Langevin)')
 
-parser.add_argument('-R', '--run_length', default=200, type=int, help='number of MD steps between MC moves')
-parser.add_argument('--MC_moves', default=1.0, type=float, help='number of MC moves per rod between MD runs')
+parser.add_argument('-R', '--run_length', default=200, type=int,
+                    help='number of MD steps between MC moves')
+parser.add_argument('--MC_moves', default=1.0, type=float,
+                    help='number of MC moves per rod between MD runs')
 
-parser.add_argument('--clusters', default=2.5, type=float, help='the max distance (in rod radii) for two rods to be \
+parser.add_argument('--clusters', default=2.5, type=float,
+                    help='the max distance (in rod radii) for two rods to be\
 in the same cluster (put to 0.0 to turn cluster tracking off)')
 
-parser.add_argument('-o', '--output_freq', type=int, help='''configuration output frequency (in MD steps);
-default behavior is after every batch of MC moves''')
-parser.add_argument('-s', '--silent', action='store_true', help="doesn't print anything to stdout")
+parser.add_argument('-o', '--output_freq', type=int,
+                    help='configuration output frequency (in MD steps);\
+default behavior is after every batch of MC moves')
+parser.add_argument('-s', '--silent', action='store_true',
+                    help="doesn't print anything to stdout")
 
 args = parser.parse_args()
 
@@ -116,7 +131,7 @@ else:
         
         py_lmp.command('run {:d} post no'.format(args.run_length))
             
-        success = simulation.conformation_Monte_Carlo(mc_moves_per_run)
+        success = simulation.state_change_MC(mc_moves_per_run)
         
         if not args.silent:
             base_count = simulation.state_count(0)

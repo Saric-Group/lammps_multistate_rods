@@ -189,7 +189,10 @@ class Simulation(object):
                 if bead_type in self.model.body_bead_types:
                     sigma += self.model.rod_radius
                 else:
-                    sigma += self.model.patch_bead_radius
+                    for k in range(self.model.num_patches):
+                        if bead_type in self.model.patch_bead_types[k]:
+                            sigma += self.model.patch_bead_radii[k]
+                            break
             type_1 = bead_types[0] + self.type_offset
             type_2 = bead_types[1] + self.type_offset
             self._set_pair_coeff(type_1, type_2, eps_val, sigma)

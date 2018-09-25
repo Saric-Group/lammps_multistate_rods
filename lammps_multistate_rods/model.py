@@ -9,6 +9,7 @@ Created on 17 Jul 2018
 
 import os, re
 from math import cos, sin, pi
+import numbers
 
 vx = 'vx'
 
@@ -24,19 +25,19 @@ class Model(object):
 
     def __init__(self, config_file_path):
         # ROD PROPERTIES (available to set in the config file)
+        rod_radius = 1.0 #default
+        rod_length = 8.0*rod_radius #default
+        rod_mass = 1.0 #default
         rod_states = None #example: ('soluble_state', 'beta_state')
         num_states = None #dependent on "rod_states"
         state_structures = None #dependent on "rod_states"
             #example of elements:
             # state_structures[0] = '111111112|3333' # '1' is inert body type, '3' is inert side-patch type
             # state_structures[1] = '111111111|4444' # '2' is active body type, '4' is active side-patch type
-        rod_radius = 1.0 #default
-        body_bead_overlap = 1.25*rod_radius #default
-        patch_angles = (0.0,)
-        patch_bead_radius = 0.25*rod_radius #default
-        patch_bead_sep = 0.9*rod_radius #default
+        patch_angles = (0.0,) #default
+        patch_bead_radii = None
+        patch_bead_sep = None
         patch_bulge_out = 0.0 #default
-        rod_mass = 1.0 #default
         # INTERACTION PROPERTIES (available to set in the config file)
         int_types = None # interaction types (with parameters)
             #example:
@@ -73,8 +74,8 @@ class Model(object):
                     rod_states = eval(expr)
                     num_states = len(rod_states)
                     state_structures = ['']*num_states
-                elif assign in ('rod_radius', 'body_bead_overlap', 'rod_mass',
-                                'patch_angles', 'patch_bead_radius', 'patch_bead_sep',
+                elif assign in ('rod_radius', 'rod_length', 'rod_mass',
+                                'patch_angles', 'patch_bead_radii', 'patch_bead_sep',
                                 'patch_bulge_out', 'int_types'):
                     exec(command)
                 elif re.compile(r'state_structures\[\d+\]').match(assign) != None:
@@ -87,17 +88,18 @@ class Model(object):
                     raise Exception('ERROR: Unknown config parameter encountered (' + line + ')')
                 command = ''
         
+        self.rod_radius = rod_radius
+        self.rod_length = rod_length
+        self.rod_mass = rod_mass
         self.rod_states = rod_states
         self.num_states = num_states
         self.state_structures = state_structures
-        self.rod_radius = rod_radius
-        self.rod_length = None #dependent on "state_structures"
         self.body_beads = None #dependent on "state_structures"
         self.body_bead_types = None #dependent on "state_structures"
-        self.body_bead_overlap = body_bead_overlap
+        self.body_bead_overlap = None
         self.num_patches = None #dependent on "state_structures"
         self.patch_angles = patch_angles
-        self.patch_bead_radius = patch_bead_radius
+        self.patch_bead_radii = patch_bead_radii
         self.patch_beads = None #dependent on "state_structures"
         self.patch_bead_types = None #dependent on "state_structures"
         self.patch_bead_sep = patch_bead_sep
@@ -105,7 +107,6 @@ class Model(object):
         self.total_beads = None #dependent on "state_structures"
         self.active_bead_types = None #dependent on "state_structures" & "eps"
         self.max_bead_type = None #dependent on "state_structures"
-        self.rod_mass = rod_mass
         self.int_types = int_types
         self.global_cutoff = 3*rod_radius
         self.eps = eps
@@ -143,11 +144,19 @@ class Model(object):
             for i in range(1, len(parts)):
                 for patch_bead_type in parts[i]:
                     self.patch_bead_types[i-1].add(int(patch_bead_type))
-            
-        if len(self.patch_angles) != len(self.patch_beads):
-            raise Exception("The number of patch angles doesn't match the number of defined patches!")
-        else:
-            self.num_patches = len(self.patch_angles)
+        
+        self.num_patches = len(self.patch_beads) 
+        
+        if len(self.patch_angles) != self.num_patches:
+            raise Exception("The length of patch_angles doesn't match the number of defined patches!")
+        if len(self.patch_bead_radii) != self.num_patches:
+            raise Exception("The length of patch_bead_radii doesn't match the number of defined patches!")
+        if len(self.patch_bead_sep) != self.num_patches:
+            raise Exception("The length of patch_bead_sep doesn't match the number of defined patches!")
+        if isinstance(self.patch_bulge_out, numbers.Number):
+            self.patch_bulge_out = tuple([self.patch_bulge_out]*self.num_patches)
+        elif len(self.patch_bulge_out) != self.num_patches:
+            raise Exception("The length of patch_bulge_out doesn't match the number of defined patches!")
                     
         self.total_beads = self.body_beads + sum(self.patch_beads)
         self.max_bead_type = max((max(self.body_bead_types), max(self.patch_bead_types)))
@@ -156,7 +165,7 @@ class Model(object):
             if epsilon[1] != vx:
                 self.active_bead_types.update(bead_types)
         
-        self.rod_length = self.body_beads*(2*self.rod_radius - self.body_bead_overlap) + self.body_bead_overlap 
+        self.body_bead_overlap = (2*self.rod_radius*self.body_beads - self.rod_length) / (self.body_beads - 1)
     
         antisym_completion = {}
         self.transitions = [[] for _ in range(self.num_states)]
@@ -190,8 +199,8 @@ class Model(object):
                     n += 1
                 for k in range(len(self.patch_beads)):
                     for i in range(self.patch_beads[k]):
-                        x = 0.0 - ((self.patch_beads[k] - 2*i - 1) / 2.)*(2*self.patch_bead_radius + self.patch_bead_sep)
-                        d = self.rod_radius - self.patch_bead_radius + self.patch_bulge_out
+                        x = 0.0 - ((self.patch_beads[k] - 2*i - 1) / 2.)*(2*self.patch_bead_radii[k] + self.patch_bead_sep[k])
+                        d = self.rod_radius - self.patch_bead_radii[k] + self.patch_bulge_out[k]
                         y = -sin(self.patch_angles[k]*2*pi/360)*d
                         z = cos(self.patch_angles[k]*2*pi/360)*d
                         mol_file.write("{:2d} {:6.3f} {:6.3f} {:6.3f}\n".format(n, x, y, z))

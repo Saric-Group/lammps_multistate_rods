@@ -34,7 +34,7 @@ class Model(object):
         body_bead_overlap = 1.25*rod_radius #default
         patch_angles = (0.0,)
         patch_bead_radius = 0.25*rod_radius #default
-        patch_bead_overlap = -3.5*patch_bead_radius #default
+        patch_bead_sep = 0.9*rod_radius #default
         patch_bulge_out = 0.0 #default
         rod_mass = 1.0 #default
         # INTERACTION PROPERTIES (available to set in the config file)
@@ -74,7 +74,7 @@ class Model(object):
                     num_states = len(rod_states)
                     state_structures = ['']*num_states
                 elif assign in ('rod_radius', 'body_bead_overlap', 'rod_mass',
-                                'patch_angles', 'patch_bead_radius', 'patch_bead_overlap',
+                                'patch_angles', 'patch_bead_radius', 'patch_bead_sep',
                                 'patch_bulge_out', 'int_types'):
                     exec(command)
                 elif re.compile(r'state_structures\[\d+\]').match(assign) != None:
@@ -100,7 +100,7 @@ class Model(object):
         self.patch_bead_radius = patch_bead_radius
         self.patch_beads = None #dependent on "state_structures"
         self.patch_bead_types = None #dependent on "state_structures"
-        self.patch_bead_overlap = patch_bead_overlap
+        self.patch_bead_sep = patch_bead_sep
         self.patch_bulge_out = patch_bulge_out
         self.total_beads = None #dependent on "state_structures"
         self.active_bead_types = None #dependent on "state_structures" & "eps"
@@ -190,7 +190,7 @@ class Model(object):
                     n += 1
                 for k in range(len(self.patch_beads)):
                     for i in range(self.patch_beads[k]):
-                        x = 0.0 - ((self.patch_beads[k] - 2*i - 1) / 2.)*(2*self.patch_bead_radius - self.patch_bead_overlap)
+                        x = 0.0 - ((self.patch_beads[k] - 2*i - 1) / 2.)*(2*self.patch_bead_radius + self.patch_bead_sep)
                         d = self.rod_radius - self.patch_bead_radius + self.patch_bulge_out
                         y = -sin(self.patch_angles[k]*2*pi/360)*d
                         z = cos(self.patch_angles[k]*2*pi/360)*d

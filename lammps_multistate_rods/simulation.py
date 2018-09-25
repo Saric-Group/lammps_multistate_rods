@@ -16,7 +16,7 @@ import lammps_multistate_rods
 
 class Simulation(object):
     '''
-    This class is a wrapper for a single simulation of multistate rods in LAMMPS. It holds
+    This class is a wrapper for a single simulation of multi-state rods in LAMMPS. It holds
     all the necessary information and its state should reflect the true state of the
     LAMMPS simulation.
     Once "setup" is called and the rods are created, all changes to the number

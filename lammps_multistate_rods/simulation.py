@@ -19,9 +19,8 @@ class Simulation(object):
     This class is a wrapper for a single simulation of multi-state rods in LAMMPS. It holds
     all the necessary information and its state should reflect the true state of the
     LAMMPS simulation.
-    Once "setup" is called and the rods are created, all changes to the number
-    and type of particles in the simulation should go through methods of this class, otherwise
-    inconsistent states will probably be reached.
+    All changes to the particles created by this library (the rods) should go through methods
+    of this class, otherwise inconsistent states will probably be reached.
     '''
     
     rods_group = "rods" # name of the LAMMPS group which holds all particles of all the rods
@@ -71,13 +70,12 @@ class Simulation(object):
         self.seed = seed
         self.temp = temp
         self.clusters = clusters
-        self.particle_offset = None
         self.type_offset = None
         self._all_atom_types = None
         self._active_bead_types = None
         self._state_types = None
-        self._nrods = 0
         self._rods = []
+        self._nrods = 0
         self._rod_counters = [0]*model.num_states
     
     def _set_pair_coeff(self, type_1, type_2, (eps, int_type_key), sigma):
@@ -199,7 +197,8 @@ class Simulation(object):
         
         self.py_lmp.bond_coeff(self.bond_offset + 1, 'zero')
         
-        #set cluster tracking
+        #create groups & set cluster tracking
+        self.py_lmp.group(Simulation.rods_group, "empty")
         if self.clusters > 0.0:
             self.py_lmp.group(Simulation.active_beads_group, "empty")
             self.py_lmp.compute(Simulation.cluster_compute, Simulation.active_beads_group, "aggregate/atom",
@@ -224,13 +223,8 @@ class Simulation(object):
                 ...(N-1 more lines like above)...
             where the <angle> should be in radians, and the Rs are components of a unit vector about
             which to rotate, and whose origin is at the insertion point.
-        
-        IMPORTANT: This method should be called after the creation of all other
-        non-rod particles, since the library expects rods to be created last. It can,
-        however, be called multiple times (rods don't have to be created all at once).
         '''
-        if self.particle_offset == None:
-            self.particle_offset = self.py_lmp.lmp.get_natoms() #number of atoms before the creation of first rods
+        particle_offset = self.py_lmp.lmp.get_natoms()
         
         if "region" in kwargs.keys():
             region_ID = kwargs['region']
@@ -258,18 +252,20 @@ class Simulation(object):
         self._all_atom_types = self.py_lmp.lmp.gather_atoms("type", 0, 1)
         
         # create & populate LAMMPS groups (and setup cluster tracking)
-        self.py_lmp.group(Simulation.rods_group, "id >", self.particle_offset) # contains all rods, regardless of state
+        self.py_lmp.group("temp_new_rods", "id >", particle_offset)
+        self.py_lmp.group(Simulation.rods_group, "union", Simulation.rods_group, "temp_new_rods")
+        self.py_lmp.group("temp_new_rods", "clear")
         if self.clusters > 0.0:
             self.py_lmp.group(Simulation.active_beads_group, "type", self._active_bead_types) # contains all active beads of all rods
         
         # create rods (in Python) + supporting stuff
-        self._nrods = int((self.py_lmp.lmp.get_natoms() - self.particle_offset) / self.model.total_beads)
-        rods_before = len(self._rods)
-        new_rods = self._nrods - rods_before
-        for i in range(rods_before, self._nrods):
-            rod_start_index = self.particle_offset + i * self.model.total_beads
+        rods_before = self._nrods
+        new_rods = int((self.py_lmp.lmp.get_natoms() - particle_offset) / self.model.total_beads)
+        for i in range(new_rods):
+            rod_start_index = particle_offset + i * self.model.total_beads
             rod_atom_indices = range(rod_start_index, rod_start_index + self.model.total_beads)
-            self._rods.append(lammps_multistate_rods.Rod(self, i+1, rod_atom_indices, state_ID))
+            self._rods.append(lammps_multistate_rods.Rod(self, rods_before + i + 1, rod_atom_indices, state_ID))
+        self._nrods = len(self._rods) # = rods_before + new_rods
         self._rod_counters[state_ID] += new_rods
     
     def set_rod_dynamics(self, ensemble = "", **kwargs):

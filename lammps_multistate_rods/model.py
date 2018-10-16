@@ -157,6 +157,17 @@ class Model(object):
             self.patch_bulge_out = tuple([self.patch_bulge_out]*self.num_patches)
         elif len(self.patch_bulge_out) != self.num_patches:
             raise Exception("The length of patch_bulge_out doesn't match the number of defined patches!")
+        
+        all_type_sets = [self.body_bead_types]
+        all_type_sets.extend(self.patch_bead_types)
+        i = 0
+        while i <= self.num_patches:
+            j = i+1
+            while j <= self.num_patches:
+                if len(all_type_sets[i].intersection(all_type_sets[j])) != 0:
+                    raise Exception("One bead type can appear only in the same patch or the body!")
+                j += 1
+            i += 1
                     
         self.total_beads = self.body_beads + sum(self.patch_beads)
         self.max_bead_type = max((max(self.body_bead_types), max(self.patch_bead_types)))

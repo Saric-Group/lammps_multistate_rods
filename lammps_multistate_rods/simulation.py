@@ -11,8 +11,7 @@ from math import exp, sqrt, pi
 import random
 
 from lammps import PyLammps
-
-import lammps_multistate_rods
+import rod, model
 
 class Simulation(object):
     '''
@@ -179,8 +178,8 @@ class Simulation(object):
         for bead_type in self.model.body_bead_types:
             self.py_lmp.mass(bead_type + self.type_offset, self.model.rod_mass/self.model.body_beads)
             
-        # set interactions (initially all to 0 because of unused types)
-        self._set_pair_coeff(rod_type_range, rod_type_range, (0.0, self.model.int_types.keys()[0]), 1.0)
+        # set interactions (initially all to 0, because of unused types)
+        self._set_pair_coeff(rod_type_range, rod_type_range, (0.0, model.vx), 1.0)
         for bead_types, eps_val in self.model.eps.iteritems():
             sigma = 0
             for bead_type in bead_types:
@@ -264,7 +263,7 @@ class Simulation(object):
         for i in range(new_rods):
             rod_start_index = particle_offset + i * self.model.total_beads
             rod_atom_indices = range(rod_start_index, rod_start_index + self.model.total_beads)
-            self._rods.append(lammps_multistate_rods.Rod(self, rods_before + i + 1, rod_atom_indices, state_ID))
+            self._rods.append(rod.Rod(self, rods_before + i + 1, rod_atom_indices, state_ID))
         self._nrods = len(self._rods) # = rods_before + new_rods
         self._rod_counters[state_ID] += new_rods
     

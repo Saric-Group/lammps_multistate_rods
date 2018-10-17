@@ -40,6 +40,7 @@ class Model(object):
         patch_bulge_out = 0.0 #default
         # INTERACTION PROPERTIES (available to set in the config file)
         int_types = None # interaction types (with parameters)
+        vx_strength = 5.0 #default
             #example:
             # int_types = {'patch':('cosine/squared', 1.75*rod_radius),
             #              'tip':('cosine/squared', 1.0*rod_radius, 'wca'),
@@ -74,18 +75,20 @@ class Model(object):
                     rod_states = eval(expr)
                     num_states = len(rod_states)
                     state_structures = ['']*num_states
-                elif assign in ('rod_radius', 'rod_length', 'rod_mass',
-                                'patch_angles', 'patch_bead_radii', 'patch_bead_sep',
-                                'patch_bulge_out', 'int_types'):
+#                 elif assign in ('rod_radius', 'rod_length', 'rod_mass',
+#                                 'patch_angles', 'patch_bead_radii', 'patch_bead_sep',
+#                                 'patch_bulge_out', 'int_types'):
+#                     exec(command)
+#                 elif re.compile(r'state_structures\[\d+\]').match(assign) != None:
+#                     exec(command)
+#                 elif re.compile(r'eps\[\(\d+,\d+\)\]').match(assign) != None:
+#                     exec(command)
+#                 elif re.compile(r'trans_penalty\[\(\d+,\d+\)\]').match(assign) != None:
+#                     exec(command)
+#                 else:
+#                     raise Exception('ERROR: Unknown config parameter encountered (' + line + ')')
+                else: #allow whatever command, support variables to be defined etc.
                     exec(command)
-                elif re.compile(r'state_structures\[\d+\]').match(assign) != None:
-                    exec(command)
-                elif re.compile(r'eps\[\(\d+,\d+\)\]').match(assign) != None:
-                    exec(command)
-                elif re.compile(r'trans_penalty\[\(\d+,\d+\)\]').match(assign) != None:
-                    exec(command)
-                else:
-                    raise Exception('ERROR: Unknown config parameter encountered (' + line + ')')
                 command = ''
         
         self.rod_radius = rod_radius
@@ -105,15 +108,17 @@ class Model(object):
         self.patch_bead_sep = patch_bead_sep
         self.patch_bulge_out = patch_bulge_out
         self.total_beads = None #dependent on "state_structures"
+        self.all_bead_types = None #dependent on "state_structures"
         self.active_bead_types = None #dependent on "state_structures" & "eps"
         self.max_bead_type = None #dependent on "state_structures"
         self.int_types = int_types
+        self.vx_strength = vx_strength
         self.global_cutoff = 3*rod_radius
         self.eps = eps
         self.trans_penalty = trans_penalty
         self.transitions = None #dependent on "trans_penalty";
             # a list by state_ID of lists of (state_ID, penalty) pairs for all allowed transitions
-    
+        
         self._set_dependent_params()
     
     def _set_dependent_params(self):
@@ -132,19 +137,20 @@ class Model(object):
                 self.body_beads = len(parts[0])
             elif len(parts[0]) != self.body_beads:
                 raise Exception('All states must have the same number of body beads!')
-            for body_bead_type in parts[0]:
-                self.body_bead_types.add(int(body_bead_type))
+            
+            self.body_bead_types.update(map(int, parts[0]))
             
             if self.patch_beads == None:
                 self.patch_beads = map(len, parts[1:])
             elif map(len, parts[1:]) != self.patch_beads:
                 raise Exception('All states must have the same number of patch int sites!')
+            
             if self.patch_bead_types == None:
                 self.patch_bead_types = [set() for _ in range(1, len(parts))]
             for i in range(1, len(parts)):
-                for patch_bead_type in parts[i]:
-                    self.patch_bead_types[i-1].add(int(patch_bead_type))
+                self.patch_bead_types[i-1].update(map(int, parts[i]))
         
+        self.total_beads = self.body_beads + sum(self.patch_beads)
         self.num_patches = len(self.patch_beads) 
         
         if len(self.patch_angles) != self.num_patches:
@@ -158,25 +164,43 @@ class Model(object):
         elif len(self.patch_bulge_out) != self.num_patches:
             raise Exception("The length of patch_bulge_out doesn't match the number of defined patches!")
         
-        all_type_sets = [self.body_bead_types]
-        all_type_sets.extend(self.patch_bead_types)
+        all_types = list(self.body_bead_types)
+        for i_patch_types in self.patch_bead_types:
+            all_types.extend(i_patch_types)
+        self.all_bead_types = sorted(set(all_types))
+        if len(self.all_bead_types) != len(all_types):
+            raise Exception("One bead type can appear only in the same patch or the body!")
+        
+        self.max_bead_type = max(self.all_bead_types)
+        self.active_bead_types = set()
+        eps_temp = self.eps; self.eps = {}
+        # fill "eps" and sort it's keys...
+        for bead_types, eps_val in eps_temp.iteritems():
+            if eps_val[1] != vx:
+                self.active_bead_types.update(bead_types)
+            if bead_types[0] <= bead_types[1]:
+                self.eps[bead_types] = eps_val
+            else:
+                self.eps[(bead_types[1], bead_types[0])] = eps_val
         i = 0
-        while i <= self.num_patches:
-            j = i+1
-            while j <= self.num_patches:
-                if len(all_type_sets[i].intersection(all_type_sets[j])) != 0:
-                    raise Exception("One bead type can appear only in the same patch or the body!")
+        while i < len(self.all_bead_types):
+            type_1 = self.all_bead_types[i]
+            j = i
+            while j < len(self.all_bead_types):
+                type_2 = self.all_bead_types[j]
+                try:
+                    self.eps[(type_1, type_2)]
+                except KeyError:
+                    self.eps[(type_1, type_2)] = (self.vx_strength, vx)
                 j += 1
             i += 1
-                    
-        self.total_beads = self.body_beads + sum(self.patch_beads)
-        self.max_bead_type = max(map(max, all_type_sets))
-        self.active_bead_types = set()
-        for bead_types, epsilon in self.eps.iteritems():
-            if epsilon[1] != vx:
-                self.active_bead_types.update(bead_types)
         
         self.body_bead_overlap = (2*self.rod_radius*self.body_beads - self.rod_length) / (self.body_beads - 1)
+        
+        try:
+            self.int_types[vx]
+        except KeyError:
+            self.int_types[vx] = ('lj/cut', 0.0)
     
         antisym_completion = {}
         self.transitions = [[] for _ in range(self.num_states)]

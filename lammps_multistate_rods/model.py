@@ -170,7 +170,7 @@ class Model(object):
             i += 1
                     
         self.total_beads = self.body_beads + sum(self.patch_beads)
-        self.max_bead_type = max((max(self.body_bead_types), max(self.patch_bead_types)))
+        self.max_bead_type = max(map(max, all_type_sets))
         self.active_bead_types = set()
         for bead_types, epsilon in self.eps.iteritems():
             if epsilon[1] != vx:

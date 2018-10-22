@@ -178,7 +178,7 @@ class Simulation(object):
         for bead_type in self.model.body_bead_types:
             self.py_lmp.mass(bead_type + self.type_offset, self.model.rod_mass/self.model.body_beads)
             
-        # set interactions (initially all to 0, because of unused types)
+        # set interactions (initially to 0 between all pairs of types)
         self._set_pair_coeff(rod_type_range, rod_type_range, (0.0, model.vx), 1.0)
         for bead_types, eps_val in self.model.eps.iteritems():
             sigma = 0

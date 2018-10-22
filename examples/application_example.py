@@ -31,7 +31,7 @@ parser.add_argument('sim_length', type=int,
 parser.add_argument('--seed', type=int,
                     help='the seed for random number generators')
 
-parser.add_argument('-T', '--temp', default=4.0, type=float,
+parser.add_argument('-T', '--temp', default=1.0, type=float,
                     help='the temperature of the system (e.g. for Langevin)')
 parser.add_argument('-D', '--damp', default=0.1, type=float,
                     help='viscous damping (for Langevin)')

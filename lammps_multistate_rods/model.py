@@ -7,7 +7,7 @@ Created on 17 Jul 2018
 @author: Eugen Rožić
 '''
 
-import os, re
+import os
 from math import cos, sin, pi
 import numbers
 
@@ -40,7 +40,6 @@ class Model(object):
         patch_bulge_out = 0.0 #default
         # INTERACTION PROPERTIES (available to set in the config file)
         int_types = None # interaction types (with parameters)
-        vx_strength = 5.0 #default
             #example:
             # int_types = {'patch':('cosine/squared', 1.75*rod_radius),
             #              'tip':('cosine/squared', 1.0*rod_radius, 'wca'),
@@ -112,7 +111,6 @@ class Model(object):
         self.active_bead_types = None #dependent on "state_structures" & "eps"
         self.max_bead_type = None #dependent on "state_structures"
         self.int_types = int_types
-        self.vx_strength = vx_strength
         self.global_cutoff = 3*rod_radius
         self.eps = eps
         self.trans_penalty = trans_penalty
@@ -174,7 +172,7 @@ class Model(object):
         self.max_bead_type = max(self.all_bead_types)
         self.active_bead_types = set()
         eps_temp = self.eps; self.eps = {}
-        # fill "eps" and sort it's keys...
+        # rectify "eps"'s keys (type_1 < type_2)
         for bead_types, eps_val in eps_temp.iteritems():
             if eps_val[1] != vx:
                 self.active_bead_types.update(bead_types)
@@ -182,18 +180,19 @@ class Model(object):
                 self.eps[bead_types] = eps_val
             else:
                 self.eps[(bead_types[1], bead_types[0])] = eps_val
-        i = 0
-        while i < len(self.all_bead_types):
-            type_1 = self.all_bead_types[i]
-            j = i
-            while j < len(self.all_bead_types):
-                type_2 = self.all_bead_types[j]
-                try:
-                    self.eps[(type_1, type_2)]
-                except KeyError:
-                    self.eps[(type_1, type_2)] = (self.vx_strength, vx)
-                j += 1
-            i += 1
+#         # fill all missing interactions with volume-exclusion
+#         i = 0
+#         while i < len(self.all_bead_types):
+#             type_1 = self.all_bead_types[i]
+#             j = i
+#             while j < len(self.all_bead_types):
+#                 type_2 = self.all_bead_types[j]
+#                 try:
+#                     self.eps[(type_1, type_2)]
+#                 except KeyError:
+#                     self.eps[(type_1, type_2)] = (self.vx_strength, vx)
+#                 j += 1
+#             i += 1
         
         self.body_bead_overlap = (2*self.rod_radius*self.body_beads - self.rod_length) / (self.body_beads - 1)
         

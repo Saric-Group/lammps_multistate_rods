@@ -13,9 +13,9 @@ Created on 16 Mar 2018
 import argparse
 
 parser = argparse.ArgumentParser(description=
-                                 'Program for NVE+Langevin hybrid LAMMPS simulation of spherocylinder-like\
+'Program for NVE+Langevin hybrid LAMMPS simulation of spherocylinder-like\
 rods using the "lammps_multistate_rods" library.',
-                                formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 parser.add_argument('config_file',
                     help='path to the "lammps_multistate_rods" model config file')
@@ -75,8 +75,8 @@ log_path = os.path.join(args.output_folder, str(args.seed)+'_lammps.log')
 
 py_lmp = PyLammps(cmdargs=['-screen','none'])
 model = rods.Model(args.config_file)
-simulation = rods.Simulation(py_lmp, model, args.seed, args.temp, args.output_folder,
-                             log_path, clusters=args.clusters)
+simulation = rods.Simulation(py_lmp, model, args.seed, args.output_folder,
+                             log_path=log_path, clusters=args.clusters)
 
 # various things to optionally set/define in LAMMPS
 py_lmp.units("lj")

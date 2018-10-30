@@ -26,7 +26,7 @@ class Simulation(object):
     active_beads_group = "active_rod_beads" # name of the LAMMPS group which holds the active beads of all rods
     cluster_compute = "rod_cluster" # name of the LAMMPS compute that gives cluster labels to active beads
     
-    def __init__(self, py_lmp, model, seed, temp, output_dir, log_path=None, clusters=3.0):
+    def __init__(self, py_lmp, model, seed, output_dir, log_path=None, clusters=3.0):
         '''
         Generates the model files and initiates the LAMMPS log.
         
@@ -35,9 +35,6 @@ class Simulation(object):
         model : pointer to a Model object
         
         seed : a seed to be used for all random number generators
-        
-        temp : just a factor for interaction strengths (because they are given in relation to
-        the temperature); if the system is not thermostated just put 1.0
         
         output_dir : where all files that are created (.mol, LAMMPS log, dumps etc.) will be put
         
@@ -67,7 +64,6 @@ class Simulation(object):
             
         # simulation properties (most of which to be set in "setup" and "create_rods")
         self.seed = seed
-        self.temp = temp
         self.clusters = clusters
         self.type_offset = None
         self._all_atom_types = None
@@ -82,21 +78,21 @@ class Simulation(object):
         int_type = self.model.int_types[int_type_key]
         
         if int_type[0] == 'lj/cut':
-            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], eps*self.temp,
+            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], eps,
                                    sigma/pow(2,1./6), sigma+int_type[1])
         elif int_type[0] == 'cosine/squared':
-            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], eps*self.temp,
+            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], eps,
                                    sigma, sigma+int_type[1],
                                    int_type[2] if len(int_type)==3 else "")
         elif int_type[0] == 'nm/cut':
-            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], eps*self.temp,
+            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], eps,
                                    sigma, int_type[1], int_type[2], sigma+int_type[3])
         elif int_type[0] == 'morse':
-            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], eps*self.temp,
+            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], eps,
                                    int_type[1], sigma, sigma+int_type[2])
         elif int_type[0] == 'gauss/cut':
             H = -eps*sqrt(2*pi)*int_type[1]
-            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], H*self.temp,
+            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], H,
                                    sigma, int_type[1], sigma+int_type[2])
         else:
             raise Exception('Unknown/invalid int_type parameter: '+ str(int_type))
@@ -104,7 +100,7 @@ class Simulation(object):
     def setup(self, region_ID, atom_style=None, type_offset=0, extra_pair_styles=[], overlay=False,
               bond_offset=0, extra_bond_styles=[], **kwargs):
         '''
-        This method sets-up all the styles (atom, pair, bond), the simulation region_ID and all the
+        This method sets-up all the styles (atom, pair, bond), the simulation box and all the
         data need to simulate the rods (mass, coeffs, etc.).
         
         region_ID : the region ID to use in the "create_box" command
@@ -323,7 +319,7 @@ class Simulation(object):
         '''
         return self._rods[random.randrange(self._nrods)]
 
-    def try_state_change(self, rod, U_before):
+    def _try_state_change(self, rod, U_before, T):
         '''
         Tries an MC state change on the given rod. The change
         is accepted with probability equal to:
@@ -346,7 +342,7 @@ class Simulation(object):
         self.py_lmp.command('run 0 post no')
     
         U_after = self.total_pe()
-        accept_prob = exp(-(U_after - U_before)/self.temp - penalty)
+        accept_prob = exp((U_before - U_after - penalty) / T)
     
         if (accept_prob > 1 or random.random() < accept_prob):
             self._rod_counters[old_state] -= 1
@@ -368,9 +364,10 @@ class Simulation(object):
             self.py_lmp.log('none') # don't print all the "run 0" runs
     
         U_start = U_current = self.total_pe()
+        T_current = self.py_lmp.lmp.extract_compute("thermo_temp", 0, 0)
         success = 0
         for _ in range(ntries):
-            (acpt, U_current) = self.try_state_change(self.get_random_rod(), U_current)
+            (acpt, U_current) = self._try_state_change(self.get_random_rod(), U_current, T_current)
             success += acpt
     
         if self.log_path != None:

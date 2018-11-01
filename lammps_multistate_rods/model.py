@@ -60,10 +60,7 @@ class Model(object):
             for line in config_file:
                 line = line.strip()
                 if line.startswith('#') or line == '':
-                    if command == '':
-                        continue
-                    else:
-                        raise Exception('ERROR: comment or empty line in the middle of a multi-line command!')
+                    continue
                 command += line
                 if line.endswith(','):
                     continue
@@ -166,8 +163,8 @@ class Model(object):
         for i_patch_types in self.patch_bead_types:
             all_types.extend(i_patch_types)
         self.all_bead_types = sorted(set(all_types))
-        if len(self.all_bead_types) != len(all_types):
-            raise Exception("One bead type can appear only in the same patch or the body!")
+#         if len(self.all_bead_types) != len(all_types):
+#             raise Exception("One bead type can appear only in the same patch or the body!")
         
         self.max_bead_type = max(self.all_bead_types)
         self.active_bead_types = set()

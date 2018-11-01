@@ -69,6 +69,8 @@ class Model(object):
                 expr = parts[1].strip()
                 if assign == 'rod_states':
                     rod_states = eval(expr)
+                    if not isinstance(rod_states, (tuple, list)):
+                        raise Exception("'rod_states' has to be either a tuple or a list!")
                     num_states = len(rod_states)
                     state_structures = ['']*num_states
 #                 elif assign in ('rod_radius', 'rod_length', 'rod_mass',

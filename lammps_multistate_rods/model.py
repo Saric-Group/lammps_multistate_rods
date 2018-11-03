@@ -128,7 +128,7 @@ class Model(object):
         '''
         self.body_bead_types = set()
         for state_struct in self.state_structures: #check all have the same "form"
-            parts = state_struct.split('|')
+            parts = map(lambda x: x.split('-'), state_struct.split('|'))            
             
             if self.body_beads == None:
                 self.body_beads = len(parts[0])

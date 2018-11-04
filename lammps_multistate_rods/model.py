@@ -32,8 +32,8 @@ class Model(object):
         num_states = None #dependent on "rod_states"
         state_structures = None #dependent on "rod_states"
             #example of elements:
-            # state_structures[0] = '111111112|3333' # '1' is inert body type, '3' is inert side-patch type
-            # state_structures[1] = '111111111|4444' # '2' is active body type, '4' is active side-patch type
+            # state_structures[0] = '1-1-1-1-1-1-2|3-3-3-3' # '1' is inert body type, '3' is inert side-patch type
+            # state_structures[1] = '1-1-1-1-1-1-1|4-4-4-4' # '2' is active body type, '4' is active side-patch type
         patch_angles = (0.0,) #default
         patch_bead_radii = None
         patch_bead_sep = None
@@ -94,7 +94,14 @@ class Model(object):
         self.rod_mass = rod_mass
         self.rod_states = rod_states
         self.num_states = num_states
-        self.state_structures = state_structures
+        self.state_structures = [ [ [ int(bead_type) for bead_type in patch.split('-')]
+                                    for patch in state_struct.split('|')]
+                                  for state_struct in state_structures]
+#         self.state_structures = map(lambda y: 
+#                                     map(lambda x: 
+#                                         map(int, x.split('-')),
+#                                     y.split('|')),
+#                                     state_structures)
         self.body_beads = None #dependent on "state_structures"
         self.body_bead_types = None #dependent on "state_structures"
         self.body_bead_overlap = None
@@ -128,24 +135,23 @@ class Model(object):
         '''
         self.body_bead_types = set()
         for state_struct in self.state_structures: #check all have the same "form"
-            parts = map(lambda x: x.split('-'), state_struct.split('|'))            
             
             if self.body_beads == None:
-                self.body_beads = len(parts[0])
-            elif len(parts[0]) != self.body_beads:
+                self.body_beads = len(state_struct[0])
+            elif len(state_struct[0]) != self.body_beads:
                 raise Exception('All states must have the same number of body beads!')
             
-            self.body_bead_types.update(map(int, parts[0]))
+            self.body_bead_types.update(state_struct[0])
             
             if self.patch_beads == None:
-                self.patch_beads = map(len, parts[1:])
-            elif map(len, parts[1:]) != self.patch_beads:
+                self.patch_beads = map(len, state_struct[1:])
+            elif map(len, state_struct[1:]) != self.patch_beads:
                 raise Exception('All states must have the same number of patch int sites!')
             
             if self.patch_bead_types == None:
-                self.patch_bead_types = [set() for _ in range(1, len(parts))]
-            for i in range(1, len(parts)):
-                self.patch_bead_types[i-1].update(map(int, parts[i]))
+                self.patch_bead_types = [set() for _ in range(1, len(state_struct))]
+            for i in range(1, len(state_struct)):
+                self.patch_bead_types[i-1].update(state_struct[i])
         
         self.total_beads = self.body_beads + sum(self.patch_beads)
         self.num_patches = len(self.patch_beads) 
@@ -241,9 +247,10 @@ class Model(object):
                 
                 mol_file.write("\nTypes\n\n")
                 n = 1
-                for bead_type in self.state_structures[state].replace('|',''):
-                    mol_file.write("{:2d} {:s}\n".format(n, bead_type))
-                    n += 1
+                for patch in self.state_structures[state]:
+                    for bead_type in patch:
+                        mol_file.write("{:2d} {:d}\n".format(n, bead_type))
+                        n += 1
                 
                 mol_file.write("\nBonds\n\n")
                 for i in range(1, self.total_beads):

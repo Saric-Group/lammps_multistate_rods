@@ -127,10 +127,11 @@ class Simulation(object):
         '''
         # set instance variables
         self.type_offset = type_offset
-        self._active_bead_types = ' '.join(str(t + self.type_offset) for t in self.model.active_bead_types)
-        self._state_types = []
-        for state_structure in self.model.state_structures:
-            self._state_types.append([int(atom_type) + self.type_offset for atom_type in state_structure.replace('|','')])
+        self._active_bead_types = ' '.join(str(t + self.type_offset)
+                                           for t in self.model.active_bead_types)
+        self._state_types = [ [ elem + self.type_offset 
+                                for patch in state_struct for elem in patch]
+                              for state_struct in self.model.state_structures]
         self.bond_offset = bond_offset
         
         # set LAMMPS styles (atom, pair, bond)

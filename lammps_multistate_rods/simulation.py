@@ -60,7 +60,7 @@ class Simulation(object):
     
         self.log_path = log_path
         if log_path != None:
-            py_lmp.log(log_path)
+            py_lmp.log('"'+log_path+'"')
             
         # simulation properties (most of which to be set in "setup" and "create_rods")
         self.seed = seed
@@ -166,7 +166,7 @@ class Simulation(object):
         
         # load molecules from model files
         for state_name in self.model.rod_states:
-            self.py_lmp.molecule(state_name, os.path.join(self.output_dir, state_name+'.mol'))
+            self.py_lmp.molecule(state_name, '"'+os.path.join(self.output_dir, state_name+'.mol')+'"')
             
         rod_type_range = "{:d}*{:d}".format(self.type_offset + 1, self.type_offset + self.model.max_bead_type)
         

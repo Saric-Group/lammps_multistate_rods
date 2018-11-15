@@ -113,6 +113,7 @@ class Simulation(object):
         extra_pair_styles : an iterable consisted of pair style names and parameters needed to
         define them in LAMMPS, e.g. ("lj/cut", 3.0, "lj/long/dipole/long", "cut", "long", 5.0, ...)
         WARNING: don't use the same style as given in the config file!
+        NOTE: the styles from the config file are automatically set with "shift yes"
         
         overlay : if True the "hybrid/overlay" pair_style will be used, instead of the default "hybrid"
         
@@ -139,13 +140,14 @@ class Simulation(object):
             atom_style = "molecular"
         self.py_lmp.atom_style(atom_style)
         
-        pair_styles = ['hybrid/overlay' if overlay else 'hybrid']
-        for pair_style in set([int_type[0] for int_type in self.model.int_types.values()]):
-            pair_styles.append('{:s} {:f}'.format(pair_style, self.model.global_cutoff))
-        pair_styles.append(' '.join(map(str, extra_pair_styles)))
-        self.py_lmp.pair_style(' '.join(pair_styles))
-        #for int_type in self.model.int_types.values():
-        #    self.py_lmp.pair_modify('pair', int_type[0], 'shift yes')
+        pair_styles_cmd = ['hybrid/overlay' if overlay else 'hybrid']
+        pair_styles = set([int_type[0] for int_type in self.model.int_types.values()])
+        for pair_style in pair_styles:
+            pair_styles_cmd.append('{:s} {:f}'.format(pair_style, self.model.global_cutoff))
+        pair_styles_cmd.append(' '.join(map(str, extra_pair_styles)))
+        self.py_lmp.pair_style(' '.join(pair_styles_cmd))
+        for pair_style in pair_styles:
+            self.py_lmp.pair_modify('pair', pair_style, 'shift yes')
         
         self.py_lmp.bond_style('hybrid', 'zero', ' '.join(map(str, extra_bond_styles)))
         

@@ -107,11 +107,11 @@ dump_elems = "id x y z type mol"
 if args.clusters > 0.0:
     dump_elems += " c_"+simulation.cluster_compute
 if (args.output_freq != None):
-    py_lmp.dump("dump_cmd", "all", "custom", args.output_freq, dump_path, dump_elems)
+    py_lmp.dump("dump_cmd", "all", "custom", args.output_freq, '"'+dump_path+'"', dump_elems)
     py_lmp.dump_modify("dump_cmd", "sort id")
 else:
     py_lmp.variable("out_timesteps", "equal", "stride(1,{:d},{:d})".format(args.sim_length+1, args.run_length))
-    py_lmp.dump("dump_cmd", "all", "custom", 1, dump_path, dump_elems)
+    py_lmp.dump("dump_cmd", "all", "custom", 1, '"'+dump_path+'"', dump_elems)
     py_lmp.dump_modify("dump_cmd", "every v_out_timesteps", "sort id")
 
 py_lmp.thermo_style("custom", "step atoms", "pe temp")
@@ -122,17 +122,11 @@ py_lmp.thermo(args.run_length)
 mc_moves_per_run = int(args.MC_moves * simulation.rods_count())
 
 if mc_moves_per_run == 0:
-    
     py_lmp.command('run {:d}'.format(args.sim_length))
-
 else:
-    
     for i in range(int(args.sim_length/args.run_length)-1):
-        
-        py_lmp.command('run {:d} post no'.format(args.run_length))
-            
+        py_lmp.command('run {:d} post no'.format(args.run_length))    
         success = simulation.state_change_MC(mc_moves_per_run)
-        
         if not args.silent:
             base_count = simulation.state_count(0)
             beta_count = simulation.state_count(1)

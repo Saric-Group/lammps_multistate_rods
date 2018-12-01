@@ -119,7 +119,9 @@ py_lmp.thermo(args.run_length)
 
 ### SETUP COMPLETE ###
 
-mc_moves_per_run = int(args.MC_moves * simulation.rods_count())
+mc_moves_per_run = 0
+if model.num_states > 1:
+    mc_moves_per_run = int(args.MC_moves * simulation.rods_count())
 
 if mc_moves_per_run == 0:
     py_lmp.command('run {:d}'.format(args.sim_length))

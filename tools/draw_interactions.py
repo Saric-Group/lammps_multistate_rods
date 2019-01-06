@@ -116,14 +116,14 @@ def draw_point_rod_r_slice(vals, vals_min, fig_title = ''):
     fig_z, ax_z = plt.subplots(num=fig_title, figsize=(10,5))
     fig_z.subplots_adjust(left=0.1, bottom=0.15, right=0.99, top=0.99) #0.86 x 0.86
     
-    r_init = int(model.rod_radius*2/dx)
+    r_init = int((model.rod_radius*2 - rmin)/dx)
     lines = []
     for i in range(theta_points):
         lines.append(ax_z.plot(zs, vals[i][r_init], 'r-', lw=1.0,
                                label=r'$\phi = {:1.1f}^\circ$'.format(np.rad2deg(thetas[i])),
                                color = plot_cmap((i+1.0)/(theta_points+1))))
+    ax_z.axvline(-3.0*model.rod_radius, color='black', linestyle='--', lw=1.0)
     ax_z.axvline(3.0*model.rod_radius, color='black', linestyle='--', lw=1.0)
-    ax_z.axvline(4.0*model.rod_radius, color='black', linestyle='--', lw=0.5)
     ax_z.grid()
     
     ax_z.set_xlabel(r'$z$', **axis_font)
@@ -266,14 +266,14 @@ def draw_rod_rod_r_slice(vals, vals_min, fig_title = ''):
         psi2_init = zero_phi
     else:
         psi2_init = 0
-    r_init = int(model.rod_radius*2/dx)
+    r_init = int((model.rod_radius*2 - rmin)/dx)
     lines = []
     for i in range(theta_points):
         lines.append(ax_z.plot(zs, vals[psi2_init][i][r_init], 'r-', lw=1.0,
                                label=r'$\psi_1 = {:1.1f}^\circ$'.format(np.rad2deg(thetas[i])),
                                    color = plot_cmap((i+1.0)/(theta_points+1))))
+    ax_z.axvline(-3.0*model.rod_radius, color='black', linestyle='--', lw=1.0)
     ax_z.axvline(3.0*model.rod_radius, color='black', linestyle='--', lw=1.0)
-    ax_z.axvline(4.0*model.rod_radius, color='black', linestyle='--', lw=0.5)
     ax_z.grid()
     
     ax_z.set_xlabel(r'$z$', **axis_font)

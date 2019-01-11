@@ -17,8 +17,8 @@ def fibril(model, N, phi, theta, r0, output):
     i.e. a parallel stack of rods.
     
     model : A lammps_multistate_rods.Model clas instance
-    phi : azimuth angle (with respect to y-axis)
-    theta : elevation angle (with respect to x-y plane)
+    phi : azimuth angle (with respect to y-axis; in deg)
+    theta : elevation angle (with respect to x-y plane; in deg)
     r0 : centre of the fibril (a triplet)
     output : path/name of the output file
     
@@ -80,32 +80,30 @@ def fibril(model, N, phi, theta, r0, output):
     
     return zip(mins, maxs)
 
-def single(r0, axis, angle, output):
+def single(r0, phi, theta, output):
     '''
     This method outputs a file to "output" with data to create a single rod at the given
-    location "r0" with a rotation of "angle" around the given "axis" vector.
+    location and with the given orientation.
     
-    model : A lammps_multistate_rods.Model clas instance
     r0 : centre of the rod (a triplet)
-    axis : vector of rotation (a triplet)
-    angle : angle of rotation (in degrees) around R centered at r0
+    phi : azimuth angle (with respect to x-axis; in deg)
+    theta : elevation angle (with respect to x-y plane; in deg)
     output : path/name of the output file
     '''
+    
+    R_z = pyquaternion.Quaternion(axis=[0,0,1], degrees=phi)
+    R_x = pyquaternion.Quaternion(axis=[1,0,0], degrees=theta)
+    R_tot = R_z * R_x
     
     if len(r0) == 3:
         r0 = np.array(r0)
     else:
         raise Exception('Center of the rod has to be a 3-vector!')
-    if len(axis) == 3:
-        axis = np.array(axis)
-        axis /= np.linalg.norm(axis)
-    else:
-        raise Exception('"Axis" has to be a 3-vector!')
 
     with open(output, 'w') as output_file:
         output_file.write('monomers: 1\n\n')
         output_file.write('{:.2f} {:.2f} {:.2f} {:.2f} {:.3f} {:.3f} {:.3f}\n'.format(
-            r0[0], r0[1], r0[2], angle, *axis))
+            r0[0], r0[1], r0[2], R_tot.angle, *R_tot.axis))
         output_file.write('\n')
 
 def random(model, N, bounds, output):

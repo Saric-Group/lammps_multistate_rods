@@ -6,7 +6,5 @@ Created on 22 Mar 2018
 '''
 
 from model import Model
-
 from rod import Rod
-
 from simulation import Simulation

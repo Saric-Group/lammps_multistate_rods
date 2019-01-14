@@ -1,6 +1,6 @@
 # encoding: utf-8
 '''
-TODO
+This module holds just that same-name class, refer to its description.
 
 Created on 17 Jul 2018
 
@@ -223,7 +223,11 @@ class Model(object):
         if not os.path.exists(model_output_dir):
             os.makedirs(model_output_dir)
         for state in range(self.num_states):
-            with open(os.path.join(model_output_dir, self.rod_states[state]+'.mol'), "w") as mol_file:
+            output_path = os.path.join(model_output_dir, self.rod_states[state]+'.mol')
+            if os.path.exists(output_path):
+                print "WARNING: {:s} already exists, won't overwrite it...".format(output_path)
+                continue
+            with open(output_path, "w") as mol_file:
                 
                 mol_file.write("(AUTO-GENERATED file by the lammps_multistate_rods library, any changes will be OVERWRITTEN)\n\n")
                 

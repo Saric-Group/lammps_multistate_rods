@@ -10,8 +10,9 @@ Created on 8 Jan 2019
 '''
 import numpy as np
 import pyquaternion
+import os
 
-def fibril(model, N, phi, theta, r0, output):
+def fibril(model, N, phi, theta, r0, output_path):
     '''
     This method outputs a file to "output" with data to create a preformed "fibril",
     i.e. a parallel stack of rods.
@@ -20,12 +21,11 @@ def fibril(model, N, phi, theta, r0, output):
     phi : azimuth angle (with respect to y-axis; in deg)
     theta : elevation angle (with respect to x-y plane; in deg)
     r0 : centre of the fibril (a triplet)
-    output : path/name of the output file
+    output_path : path/name of the output file
     
     returns : a triplet of (min,max) coordinate pairs, one for each dimension, of
     extremal locations among all centers of the rods
-    '''
-    
+    '''    
     rod_radius = model.rod_radius
     if len(r0) == 3:
         r0 = np.array(r0)
@@ -70,8 +70,12 @@ def fibril(model, N, phi, theta, r0, output):
                 maxs[j] = locations[i][j]
             if locations[i][j] < mins[j]:
                 mins[j] = locations[i][j]
+    
+    if os.path.exists(output_path):
+        print "WARNING: {:s} already exists, won't overwrite it...".format(output_path)
+        return zip(mins, maxs)
 
-    with open(output, 'w') as output_file:
+    with open(output_path, 'w') as output_file:
         output_file.write('monomers: {:d}\n\n'.format(N))
         for loc, rot in zip(locations, rotations):
             output_file.write('{:.2f} {:.2f} {:.2f} {:.2f} {:.3f} {:.3f} {:.3f}\n'.format(
@@ -80,7 +84,7 @@ def fibril(model, N, phi, theta, r0, output):
     
     return zip(mins, maxs)
 
-def single(r0, phi, theta, output):
+def single(r0, phi, theta, output_path):
     '''
     This method outputs a file to "output" with data to create a single rod at the given
     location and with the given orientation.
@@ -88,7 +92,7 @@ def single(r0, phi, theta, output):
     r0 : centre of the rod (a triplet)
     phi : azimuth angle (with respect to x-axis; in deg)
     theta : elevation angle (with respect to x-y plane; in deg)
-    output : path/name of the output file
+    output_path : path/name of the output file
     '''
     
     R_z = pyquaternion.Quaternion(axis=[0,0,1], degrees=phi)
@@ -100,13 +104,13 @@ def single(r0, phi, theta, output):
     else:
         raise Exception('Center of the rod has to be a 3-vector!')
 
-    with open(output, 'w') as output_file:
+    with open(output_path, 'w') as output_file:
         output_file.write('monomers: 1\n\n')
         output_file.write('{:.2f} {:.2f} {:.2f} {:.2f} {:.3f} {:.3f} {:.3f}\n'.format(
             r0[0], r0[1], r0[2], R_tot.angle, *R_tot.axis))
         output_file.write('\n')
 
-def random(model, N, bounds, output):
+def random(model, N, bounds, output_path):
     '''
     Randomly placed and rotated N non-overlapping rods inside given bounds...
     TODO

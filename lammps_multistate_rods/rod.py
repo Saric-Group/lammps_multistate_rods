@@ -1,6 +1,6 @@
 # encoding: utf-8
 '''
-TODO
+This module holds just that same-name class, refer to its description.
 
 Created on 17 Jul 2018
 

@@ -341,7 +341,11 @@ class Simulation(object):
         candidate_states = self.model.transitions[old_state]
         new_state, penalty = candidate_states[random.randrange(0, len(candidate_states))] # certainty a try will be made
         rod.set_state(new_state)
-    
+        
+        #TODO this is very inefficient because "pre" has to be made to calculate new energies with new types
+        # taken into account... If one could just recalculate the interaction energies to the changed rod
+        # and update them, that would be much better (because only energy is needed...)
+        # this can maybe be done even outside of LAMMPS ?
         self.py_lmp.command('run 0 post no')
     
         U_after = self.total_pe()

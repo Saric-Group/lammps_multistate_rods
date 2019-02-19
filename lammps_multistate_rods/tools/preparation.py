@@ -51,14 +51,14 @@ def fibril(model, N, phi, theta, r0, output_path):
 
     for i in range(N):
         if i % 2 == 0:
-            locations[i] = np.array([0, (i-N/2)*rod_radius, -rod_radius])#+0.27692])
+            locations[i] = np.array([0, (i-N/2)*rod_radius, -rod_radius+0.50])#+0.27692])
             locations[i] = R_tot.rotate(locations[i]) + r0
             if R_tot.angle == 0.0:
                 rotations[i] = (R_tot.angle, [1.0, 0.0, 0.0])
             else:
                 rotations[i] = (R_tot.angle, R_tot.axis)
         else:
-            locations[i] = np.array([0, (i-N/2)*rod_radius, +rod_radius])#-0.27692])
+            locations[i] = np.array([0, (i-N/2)*rod_radius, +rod_radius-0.50])#-0.27692])
             locations[i] = R_tot.rotate(locations[i]) + r0
             if R_tot_inv.angle == 0.0:
                 rotations[i] = (R_tot_inv.angle, [1.0, 0.0, 0.0])

@@ -16,10 +16,10 @@ class Rod(object):
     lammps_multistate_rods.simulation.Simulation.
     '''
     
-    def __init__(self, simulation, mol_id, atom_indices, state = None):
+    def __init__(self, simulation, rod_id, atom_indices, state = None):
         self._sim = simulation
         self._model = simulation.model
-        self.id = mol_id
+        self.id = rod_id
         self.atom_indices = atom_indices
         self.state = state
         if state == None:

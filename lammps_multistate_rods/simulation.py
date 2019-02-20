@@ -12,6 +12,7 @@ import random
 
 from lammps import PyLammps
 import rod, model
+from ctypes import c_int
 
 class Simulation(object):
     '''
@@ -66,7 +67,6 @@ class Simulation(object):
         self.seed = seed
         self.clusters = clusters
         self.type_offset = None
-        self._all_atom_types = None
         self._active_bead_types = None
         self._state_types = None
         self._rods = []
@@ -130,9 +130,9 @@ class Simulation(object):
         self.type_offset = type_offset
         self._active_bead_types = ' '.join(str(t + self.type_offset)
                                            for t in self.model.active_bead_types)
-        self._state_types = [ [ elem + self.type_offset 
-                                for patch in state_struct for elem in patch]
-                              for state_struct in self.model.state_structures]
+        self._state_types = [ (self.model.total_beads*c_int)(
+            *[ elem + self.type_offset for patch in state_struct for elem in patch])
+            for state_struct in self.model.state_structures]
         self.bond_offset = bond_offset
         
         # set LAMMPS styles (atom, pair, bond)
@@ -222,7 +222,11 @@ class Simulation(object):
             where the <angle> should be in radians, and the Rs are components of a unit vector about
             which to rotate, and whose origin is at the insertion point.
         '''
-        particle_offset = self.py_lmp.lmp.get_natoms()
+        all_atom_ids = self.py_lmp.lmp.gather_atoms_concat("id", 0, 1)
+        if len(all_atom_ids) > 0:
+            id_offset = max(all_atom_ids)
+        else:
+            id_offset = 0
         
         if "region" in kwargs.keys():
             region_ID = kwargs['region']
@@ -246,11 +250,9 @@ class Simulation(object):
         else:
             self.py_lmp.create_atoms(self.type_offset, "box",
                                      "mol", self.model.rod_states[state_ID], self.seed)
-            
-        self._all_atom_types = self.py_lmp.lmp.gather_atoms("type", 0, 1)
         
         # create & populate LAMMPS groups (and setup cluster tracking)
-        self.py_lmp.group("temp_new_rods", "id >", particle_offset)
+        self.py_lmp.group("temp_new_rods", "id >", id_offset)
         self.py_lmp.group(Simulation.rods_group, "union", Simulation.rods_group, "temp_new_rods")
         self.py_lmp.group("temp_new_rods", "clear")
         if self.clusters > 0.0:
@@ -258,11 +260,11 @@ class Simulation(object):
         
         # create rods (in Python) + supporting stuff
         rods_before = self._nrods
-        new_rods = int((self.py_lmp.lmp.get_natoms() - particle_offset) / self.model.total_beads)
+        new_rods = int((self.py_lmp.lmp.get_natoms() - id_offset) / self.model.total_beads)
         for i in range(new_rods):
-            rod_start_index = particle_offset + i * self.model.total_beads
-            rod_atom_indices = range(rod_start_index, rod_start_index + self.model.total_beads)
-            self._rods.append(rod.Rod(self, rods_before + i + 1, rod_atom_indices, state_ID))
+            start_id = id_offset + i*self.model.total_beads + 1
+            rod_bead_ids = range(start_id, start_id + self.model.total_beads)
+            self._rods.append(rod.Rod(self, rods_before + i + 1, rod_bead_ids, state_ID))
         self._nrods = len(self._rods) # = rods_before + new_rods
         self._rod_counters[state_ID] += new_rods
     
@@ -354,7 +356,6 @@ class Simulation(object):
         if (accept_prob > 1 or random.random() < accept_prob):
             self._rod_counters[old_state] -= 1
             self._rod_counters[new_state] += 1
-            self._reset_active_beads_group()
             return (1, U_after)
         else:
             rod.set_state(old_state) # revert change back
@@ -376,6 +377,7 @@ class Simulation(object):
         for _ in range(ntries):
             (acpt, U_current) = self._try_state_change(self.get_random_rod(), U_current, T_current)
             success += acpt
+        self._reset_active_beads_group()
     
         if self.log_path != None:
             self.py_lmp.log(self.log_path, 'append')

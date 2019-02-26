@@ -12,7 +12,7 @@ import random
 
 from lammps import PyLammps
 import rod, model
-from ctypes import c_int
+from ctypes import c_int, c_double
 
 class Simulation(object):
     '''
@@ -39,6 +39,7 @@ class Simulation(object):
         
         output_dir : where all files that are created (.mol, LAMMPS log, dumps etc.) will be put
         
+        TODO update this...
         log_path : LAMMPS will be set to write to this log file and the methods of this library
         will log useful information and hide a lot of useless ones (like the voluminous output of
         "state_change_MC"). If not given everything will be logged (danger of huge log
@@ -163,19 +164,22 @@ class Simulation(object):
         create_box_args = []
         for key, value in kwargs.iteritems():
             create_box_args.append('{} {}'.format(key, value))
-        self.py_lmp.create_box(type_offset + self.model.max_bead_type, region_ID, "bond/types", 1 + bond_offset,
-                                ' '.join(create_box_args))
+        self.py_lmp.create_box(type_offset + self.model.max_bead_type, region_ID, "bond/types",
+                               1 + bond_offset, ' '.join(create_box_args))
         
         # load molecules from model files
         for state_name in self.model.rod_states:
-            self.py_lmp.molecule(state_name, '"'+os.path.join(self.output_dir, state_name+'.mol')+'"')
+            self.py_lmp.molecule(state_name,
+                                 '"'+os.path.join(self.output_dir, state_name+'.mol')+'"')
             
-        rod_type_range = "{:d}*{:d}".format(self.type_offset + 1, self.type_offset + self.model.max_bead_type)
+        rod_type_range = "{:d}*{:d}".format(self.type_offset + 1,
+                                            self.type_offset + self.model.max_bead_type)
         
         # set masses (interaction sites are massless, only body beads contribute to mass)
         self.py_lmp.mass(rod_type_range, self.model.rod_mass*10**-10)
         for bead_type in self.model.body_bead_types:
-            self.py_lmp.mass(bead_type + self.type_offset, self.model.rod_mass/self.model.body_beads)
+            self.py_lmp.mass(bead_type + self.type_offset,
+                             self.model.rod_mass/self.model.body_beads)
             
         # set interactions (initially to 0 between all pairs of types)
         self._set_pair_coeff(rod_type_range, rod_type_range, (0.0, model.vx), 1.0)
@@ -199,8 +203,8 @@ class Simulation(object):
         self.py_lmp.group(Simulation.rods_group, "empty")
         if self.clusters > 0.0:
             self.py_lmp.group(Simulation.active_beads_group, "empty")
-            self.py_lmp.compute(Simulation.cluster_compute, Simulation.active_beads_group, "aggregate/atom",
-                                 self.clusters*self.model.rod_radius)
+            self.py_lmp.compute(Simulation.cluster_compute, Simulation.active_beads_group,
+                                "aggregate/atom", self.clusters*self.model.rod_radius)
 
     def create_rods(self, state_ID=0, **kwargs):
         '''
@@ -297,14 +301,8 @@ class Simulation(object):
 #        py_lmp.compute_modify("thermo_temp", "dynamic/dof yes")
 #        py_lmp.fix_modify("rod_dynamics", "dynamic/dof yes") #only necessary for rigid/nvt
 
-    #########################################################################################
-    ### SIMULATION TOOLS ####################################################################
-
-    def total_pe(self):
-        '''
-        Returns the total (non-normalised) potential energy of the system
-        '''
-        return self.py_lmp.lmp.extract_compute("thermo_pe", 0, 0)
+    #####################################################################################
+    ### SIMULATION TOOLS ################################################################
 
     def rods_count(self):
         '''
@@ -344,15 +342,11 @@ class Simulation(object):
         new_state, penalty = candidate_states[random.randrange(0, len(candidate_states))] # certainty a try will be made
         rod.set_state(new_state)
         
-        #TODO this is very inefficient because "pre" has to be made to calculate new energies with new types
-        # taken into account... If one could just recalculate the interaction energies to the changed rod
-        # and update them, that would be much better (because only energy is needed...)
-        # this can maybe be done even outside of LAMMPS ?
-        self.py_lmp.command('run 0 post no')
-    
-        U_after = self.total_pe()
+        self.py_lmp.lmp.lib.lammps_get_pe.restype = c_double
+        U_after = self.py_lmp.lmp.lib.lammps_get_pe(self.py_lmp.lmp.lmp)
+        
         accept_prob = exp((U_before - U_after - penalty) / T)
-    
+        
         if (accept_prob > 1 or random.random() < accept_prob):
             self._rod_counters[old_state] -= 1
             self._rod_counters[new_state] += 1
@@ -367,11 +361,8 @@ class Simulation(object):
         presumed to be equilibrated to the simulation temperature.
         
         returns : the number of accepted moves
-        '''
-        if self.log_path != None:
-            self.py_lmp.log('none') # don't print all the "run 0" runs
-    
-        U_start = U_current = self.total_pe()
+        '''    
+        U_start = U_current = self.py_lmp.lmp.extract_compute("thermo_pe", 0, 0)
         T_current = self.py_lmp.lmp.extract_compute("thermo_temp", 0, 0)
         success = 0
         for _ in range(ntries):
@@ -379,10 +370,8 @@ class Simulation(object):
             success += acpt
         self._reset_active_beads_group()
     
-        if self.log_path != None:
-            self.py_lmp.log(self.log_path, 'append')
-            self.py_lmp.command('print "state_change_MC: {:d}/{:d} (delta_U = {:f})"'.format(
-                                    success, ntries, U_start - U_current))
+        self.py_lmp.command('print "state_change_MC: {:d}/{:d} (delta_U = {:f})"'.format(
+                            success, ntries, U_start - U_current))
         return success
     
     def _reset_active_beads_group(self):

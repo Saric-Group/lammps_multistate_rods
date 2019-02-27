@@ -368,7 +368,9 @@ class Simulation(object):
         for _ in range(ntries):
             (acpt, U_current) = self._try_state_change(self.get_random_rod(), U_current, T_current)
             success += acpt
-        self._reset_active_beads_group()
+        
+        if success > 0:
+            self._reset_active_beads_group()
     
         self.py_lmp.command('print "state_change_MC: {:d}/{:d} (delta_U = {:f})"'.format(
                             success, ntries, U_start - U_current))

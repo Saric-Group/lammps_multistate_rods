@@ -343,7 +343,7 @@ class Simulation(object):
         rod.set_state(new_state)
         
         self.py_lmp.lmp.lib.lammps_get_pe.restype = c_double
-        U_after = self.py_lmp.lmp.lib.lammps_get_pe(self.py_lmp.lmp.lmp)
+        U_after = self.py_lmp.lmp.lib.lammps_get_pe(self.py_lmp.lmp.lmp, 1)
         
         accept_prob = exp((U_before - U_after - penalty) / T)
         

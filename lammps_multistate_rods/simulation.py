@@ -99,7 +99,7 @@ class Simulation(object):
             raise Exception('Unknown/invalid int_type parameter: '+ str(int_type))
             
     def setup(self, region_ID, atom_style=None, type_offset=0, extra_pair_styles=[], overlay=False,
-              bond_offset=0, extra_bond_styles=[], **kwargs):
+              bond_offset=0, extra_bond_styles=[], *args):
         '''
         This method sets-up all the styles (atom, pair, bond), the simulation box and all the
         data need to simulate the rods (mass, coeffs, etc.).
@@ -113,7 +113,7 @@ class Simulation(object):
         
         extra_pair_styles : an iterable consisted of pair style names and parameters needed to
         define them in LAMMPS, e.g. ("lj/cut", 3.0, "lj/long/dipole/long", "cut", "long", 5.0, ...)
-        WARNING: don't use the same style as given in the config file!
+        WARNING: don't use the same styles already used in the config file!
         NOTE: the styles from the config file are automatically set with "shift yes"
         
         overlay : if True the "hybrid/overlay" pair_style will be used, instead of the default "hybrid"
@@ -124,15 +124,15 @@ class Simulation(object):
         define them in LAMMPS, e.g. ("harmonic", "fene", ...)
         NOTE: style "zero" is already defined by default
         
-        kwargs : any LAMMPS "create_box" command keyword is allowed here and all of it will be given
-        to the said command as "key value"
+        args : everything else will be passed verbatim as a single space-separated string
+        to the LAMMPs "box_create" command (e.g. "angle/types", "extra/???/per/atom" etc.)
         '''
         # set instance variables
         self.type_offset = type_offset
-        self._active_bead_types = ' '.join(str(t + self.type_offset)
+        self._active_bead_types = ' '.join(str(t + type_offset)
                                            for t in self.model.active_bead_types)
         self._state_types = [ (self.model.total_beads*c_int)(
-            *[ elem + self.type_offset for patch in state_struct for elem in patch])
+            *[ elem + type_offset for patch in state_struct for elem in patch])
             for state_struct in self.model.state_structures]
         self.bond_offset = bond_offset
         
@@ -153,32 +153,38 @@ class Simulation(object):
         self.py_lmp.bond_style('hybrid', 'zero', ' '.join(map(str, extra_bond_styles)))
         
         # create region_ID (with all the parameters)
+        create_box_args = ' '.join(map(str,args)).split()
         try:
-            kwargs['extra/bond/per/atom'] = int(kwargs['extra/bond/per/atom']) + 2
-        except KeyError:
-            kwargs['extra/bond/per/atom'] = 2
+            ebpa_index = create_box_args.index('extra/bond/per/atom')
+            ebpa = int(create_box_args[ebpa_index+1])
+            if ebpa < 2:
+                create_box_args[ebpa_index+1] = '2'
+        except ValueError:
+            create_box_args.extend(['extra/bond/per/atom', '2'])
         try:
-            kwargs['extra/special/per/atom'] = int(kwargs['extra/special/per/atom']) + 6
-        except KeyError:
-            kwargs['extra/special/per/atom'] = 6
-        create_box_args = []
-        for key, value in kwargs.iteritems():
-            create_box_args.append('{} {}'.format(key, value))
+            espa_index = create_box_args.index('extra/special/per/atom')
+            espa = int(create_box_args[espa_index+1])
+            if espa < 6:
+                create_box_args[espa_index+1] = '6'
+        except ValueError:
+            create_box_args.extend(['extra/special/per/atom', '6'])
+        
         self.py_lmp.create_box(type_offset + self.model.max_bead_type, region_ID, "bond/types",
                                1 + bond_offset, ' '.join(create_box_args))
         
         # load molecules from model files
         for state_name in self.model.rod_states:
             self.py_lmp.molecule(state_name,
-                                 '"'+os.path.join(self.output_dir, state_name+'.mol')+'"')
+                                 '"'+os.path.join(self.output_dir, state_name+'.mol')+'"',
+                                 "toff", type_offset, "boff", bond_offset)
             
-        rod_type_range = "{:d}*{:d}".format(self.type_offset + 1,
-                                            self.type_offset + self.model.max_bead_type)
+        rod_type_range = "{:d}*{:d}".format(type_offset + 1,
+                                            type_offset + self.model.max_bead_type)
         
         # set masses (interaction sites are massless, only body beads contribute to mass)
         self.py_lmp.mass(rod_type_range, self.model.rod_mass*10**-10)
         for bead_type in self.model.body_bead_types:
-            self.py_lmp.mass(bead_type + self.type_offset,
+            self.py_lmp.mass(bead_type + type_offset,
                              self.model.rod_mass/self.model.body_beads)
             
         # set interactions (initially to 0 between all pairs of types)
@@ -193,11 +199,11 @@ class Simulation(object):
                         if bead_type in self.model.patch_bead_types[k]:
                             sigma += self.model.patch_bead_radii[k]
                             break
-            type_1 = bead_types[0] + self.type_offset
-            type_2 = bead_types[1] + self.type_offset
+            type_1 = bead_types[0] + type_offset
+            type_2 = bead_types[1] + type_offset
             self._set_pair_coeff(type_1, type_2, eps_val, sigma)
         
-        self.py_lmp.bond_coeff(self.bond_offset + 1, 'zero')
+        self.py_lmp.bond_coeff(bond_offset + 1, 'zero')
         
         #create groups & set cluster tracking
         self.py_lmp.group(Simulation.rods_group, "empty")
@@ -234,11 +240,11 @@ class Simulation(object):
         
         if "region" in kwargs.keys():
             region_ID = kwargs['region']
-            self.py_lmp.create_atoms(self.type_offset, "region", region_ID,
+            self.py_lmp.create_atoms(0, "region", region_ID,
                                      "mol", self.model.rod_states[state_ID], self.seed)
         elif "random" in kwargs.keys():
             vals = kwargs['random']
-            self.py_lmp.create_atoms(self.type_offset, "random", vals[0], vals[1], vals[2],
+            self.py_lmp.create_atoms(0, "random", vals[0], vals[1], vals[2],
                                      "mol", self.model.rod_states[state_ID], self.seed)
         elif "file" in kwargs.keys():
             filename = kwargs['file']
@@ -247,12 +253,12 @@ class Simulation(object):
                 rods_file.readline()
                 for i in range(N):
                     vals = map(float, rods_file.readline().split())
-                    self.py_lmp.create_atoms(self.type_offset, "single", vals[0], vals[1], vals[2],
+                    self.py_lmp.create_atoms(0, "single", vals[0], vals[1], vals[2],
                                              "mol", self.model.rod_states[state_ID], self.seed,
                                              "rotate", vals[3], vals[4], vals[5], vals[6],
                                              "units box")
         else:
-            self.py_lmp.create_atoms(self.type_offset, "box",
+            self.py_lmp.create_atoms(0, "box",
                                      "mol", self.model.rod_states[state_ID], self.seed)
         
         # create & populate LAMMPS groups (and setup cluster tracking)

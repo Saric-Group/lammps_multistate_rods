@@ -350,6 +350,9 @@ class Simulation(object):
         
         self.py_lmp.lmp.lib.lammps_get_pe.restype = c_double
         U_after = self.py_lmp.lmp.lib.lammps_get_pe(self.py_lmp.lmp.lmp, 1)
+        # use these instead of the above if library has no "lammps_get_pe" method
+        # self.py_lmp.command('run 0 post no')
+        # U_after = self.py_lmp.lmp.extract_compute("thermo_pe", 0, 0)
         
         accept_prob = exp((U_before - U_after - penalty) / T)
         

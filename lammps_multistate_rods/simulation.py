@@ -11,8 +11,10 @@ from math import exp, sqrt, pi
 import random
 
 from lammps import PyLammps
-import rod, model
 from ctypes import c_int, c_double
+
+from rod import Rod
+from model import vx
 
 class Simulation(object):
     '''
@@ -27,7 +29,7 @@ class Simulation(object):
     active_beads_group = "active_rod_beads" # name of the LAMMPS group which holds the active beads of all rods
     cluster_compute = "rod_cluster" # name of the LAMMPS compute that gives cluster labels to active beads
     
-    def __init__(self, py_lmp, model, seed, output_dir, log_path=None, clusters=3.0):
+    def __init__(self, py_lmp, model, seed, output_dir, clusters=3.0):
         '''
         Generates the model files and initiates the LAMMPS log.
         
@@ -38,12 +40,6 @@ class Simulation(object):
         seed : a seed to be used for all random number generators
         
         output_dir : where all files that are created (.mol, LAMMPS log, dumps etc.) will be put
-        
-        TODO update this...
-        log_path : LAMMPS will be set to write to this log file and the methods of this library
-        will log useful information and hide a lot of useless ones (like the voluminous output of
-        "state_change_MC"). If not given everything will be logged (danger of huge log
-        files) to a file specified before (or the "log.lammps" default if not specified)
         
         clusters = <number> : the distance between bead centers that qualifies two beads (and
         consequently whole rods) to be in the same cluster. If it is > 0.0 a LAMMPS group will
@@ -59,10 +55,6 @@ class Simulation(object):
         self.model = model
         self.output_dir = output_dir
         self.model.generate_mol_files(output_dir)
-    
-        self.log_path = log_path
-        if log_path != None:
-            py_lmp.log('"'+log_path+'"')
             
         # simulation properties (most of which to be set in "setup" and "create_rods")
         self.seed = seed
@@ -70,6 +62,8 @@ class Simulation(object):
         self.type_offset = None
         self._active_bead_types = None
         self._state_types = None
+        self.bond_offset = None
+        self.pair_styles = None
         self._rods = []
         self._nrods = 0
         self._rod_counters = [0]*model.num_states
@@ -142,12 +136,12 @@ class Simulation(object):
         self.py_lmp.atom_style(atom_style)
         
         pair_styles_cmd = ['hybrid/overlay' if overlay else 'hybrid']
-        pair_styles = set([int_type[0] for int_type in self.model.int_types.values()])
-        for pair_style in pair_styles:
+        self.pair_styles = set([int_type[0] for int_type in self.model.int_types.values()])
+        for pair_style in self.pair_styles:
             pair_styles_cmd.append('{:s} {:f}'.format(pair_style, self.model.global_cutoff))
         pair_styles_cmd.append(' '.join(map(str, extra_pair_styles)))
         self.py_lmp.pair_style(' '.join(pair_styles_cmd))
-        for pair_style in pair_styles:
+        for pair_style in self.pair_styles:
             self.py_lmp.pair_modify('pair', pair_style, 'shift yes')
         
         self.py_lmp.bond_style('hybrid', 'zero', ' '.join(map(str, extra_bond_styles)))
@@ -187,8 +181,8 @@ class Simulation(object):
             self.py_lmp.mass(bead_type + type_offset,
                              self.model.rod_mass/self.model.body_beads)
             
-        # set interactions (initially to 0 between all pairs of types)
-        self._set_pair_coeff(rod_type_range, rod_type_range, (0.0, model.vx), 1.0)
+        # set interactions (initially to 0.0, of whatever interaction, between all pairs of types)
+        self._set_pair_coeff(rod_type_range, rod_type_range, (0.0, vx), self.model.global_cutoff)
         for bead_types, eps_val in self.model.eps.iteritems():
             sigma = 0
             for bead_type in bead_types:
@@ -274,7 +268,7 @@ class Simulation(object):
         for i in range(new_rods):
             start_id = id_offset + i*self.model.total_beads + 1
             rod_bead_ids = range(start_id, start_id + self.model.total_beads)
-            self._rods.append(rod.Rod(self, rods_before + i + 1, rod_bead_ids, state_ID))
+            self._rods.append(Rod(self, rods_before + i + 1, rod_bead_ids, state_ID))
         self._nrods = len(self._rods) # = rods_before + new_rods
         self._rod_counters[state_ID] += new_rods
     
@@ -328,13 +322,10 @@ class Simulation(object):
         '''
         return self._rods[random.randrange(self._nrods)]
 
-    def _try_state_change(self, rod, U_before, T):
+    def _try_state_change(self, rod, U_before, T, neigh_flag):
         '''
-        Tries an MC state change on the given rod. The change
-        is accepted with probability equal to:
-            max{ exp(- delta_U - trans_penalty), 1}
-        where:
-            delta_U = U_after - U_before
+        Tries an MC state change on the given rod. The change is accepted with
+        Boltzmann factor probability at the given temperature (T). 
     
         WARNING: this method leaves LAMMPS in an inconsistent state regarding
         thermodynamic variables (i.e. the state of atoms might not correspond
@@ -348,11 +339,15 @@ class Simulation(object):
         new_state, penalty = candidate_states[random.randrange(0, len(candidate_states))] # certainty a try will be made
         rod.set_state(new_state)
         
-        self.py_lmp.lmp.lib.lammps_get_pe.restype = c_double
-        U_after = self.py_lmp.lmp.lib.lammps_get_pe(self.py_lmp.lmp.lmp, 1)
-        # use these instead of the above if library has no "lammps_get_pe" method
-        # self.py_lmp.command('run 0 post no')
-        # U_after = self.py_lmp.lmp.extract_compute("thermo_pe", 0, 0)
+        try:
+            self.py_lmp.lmp.lib.lammps_get_pe.restype = c_double
+            U_after = self.py_lmp.lmp.lib.lammps_get_pe(self.py_lmp.lmp.lmp, neigh_flag)
+        except:
+            # use these if library has no "lammps_get_pe" method
+            print 'WARNING: LAMMPS library has no "lammps_get_pe" method! Using\
+the (much) less efficient "run 0 post no"...'
+            self.py_lmp.command('run 0 post no')
+            U_after = self.py_lmp.lmp.extract_compute("thermo_pe", 0, 0)
         
         accept_prob = exp((U_before - U_after - penalty) / T)
         
@@ -364,18 +359,38 @@ class Simulation(object):
             rod.set_state(old_state) # revert change back
             return (0, U_before)
 
-    def state_change_MC(self, ntries):
+    def state_change_MC(self, ntries, optimise=None):
         '''
         Tries to make "ntries" Monte Carlo state changes on randomly selected rods that are
         presumed to be equilibrated to the simulation temperature.
         
+        optimise: if None (default) optimisation is used (no neighbour list
+        rebuild) only if the model uses a single LAMMPS pair style, otherwise this
+        optimisation can be forced (True) or ignored (False).
+        NOTE: using optimisation while corresponding beads in different states have
+        a different style of pair interaction MAY, and most probably WILL, lead to
+        wrong energy calculations!  
+        
         returns : the number of accepted moves
-        '''    
+        '''
+        if optimise is True:
+            neigh_flag = 0
+        elif optimise is False:
+            neigh_flag = 1
+        elif optimise is None:
+            if len(self.pair_styles) > 1:
+                neigh_flag = 1
+            else:
+                neigh_flag = 0
+        else:
+            raise TypeError('optimise ({}) can only be None, True or False!'.format(optimise))
+        
         U_start = U_current = self.py_lmp.lmp.extract_compute("thermo_pe", 0, 0)
         T_current = self.py_lmp.lmp.extract_compute("thermo_temp", 0, 0)
         success = 0
         for _ in range(ntries):
-            (acpt, U_current) = self._try_state_change(self.get_random_rod(), U_current, T_current)
+            (acpt, U_current) = self._try_state_change(self.get_random_rod(),
+                                                       U_current, T_current, neigh_flag)
             success += acpt
         
         if success > 0:

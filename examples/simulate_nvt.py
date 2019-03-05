@@ -74,9 +74,10 @@ dump_path = os.path.join(args.output_folder, dump_path)
 log_path = os.path.join(args.output_folder, str(args.seed)+'_lammps.log')
 
 py_lmp = PyLammps(cmdargs=['-screen','none'])
+py_lmp.log('"'+log_path+'"')
 model = rods.Model(args.config_file)
 simulation = rods.Simulation(py_lmp, model, args.seed, args.output_folder,
-                             log_path=log_path, clusters=args.clusters)
+                             clusters=args.clusters)
 
 # various things to optionally set/define in LAMMPS
 py_lmp.units("lj")
@@ -87,8 +88,12 @@ py_lmp.region("box", "block", -args.num_cells / 2, args.num_cells / 2,
                               -args.num_cells / 2, args.num_cells / 2,
                               -args.num_cells / 2, args.num_cells / 2)
 
-# SETUP SIMULATION (styles and box) 
-simulation.setup("box") # a lot of customisation options available here
+# SETUP SIMULATION (styles and box)
+simulation.setup("box", atom_style="molecular", type_offset=0,
+                 extra_pair_styles=[], overlay=False,
+                 bond_offset=0, extra_bond_styles=[],
+                 "extra/bond/per/atom", 2,
+                 "extra/special/per/atom", 6)#...
 
 # CREATE PARTICLES
 #create other particles (and define their interactions etc.) before rods...
@@ -128,7 +133,7 @@ if mc_moves_per_run == 0:
 else:
     for i in range(int(args.sim_length/args.run_length)-1):
         py_lmp.command('run {:d} post no'.format(args.run_length))    
-        success = simulation.state_change_MC(mc_moves_per_run)
+        success = simulation.state_change_MC(mc_moves_per_run)#, optimise=True)
         if not args.silent:
             base_count = simulation.state_count(0)
             beta_count = simulation.state_count(1)

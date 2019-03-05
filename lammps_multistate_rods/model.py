@@ -59,7 +59,11 @@ class Model(object):
             command = ''
             for line in config_file:
                 line = line.strip()
-                if line.startswith('#') or line == '':
+                try:
+                    line = line[:line.index('#')]
+                except ValueError: #no '#' in line
+                    pass
+                if line == '':
                     continue
                 command += line
                 if line.endswith(','):
@@ -204,6 +208,7 @@ class Model(object):
         try:
             self.int_types[vx]
         except KeyError:
+            print 'WARNING: No "'+vx+'" interaction defined in the config file! Using "lj/cut" default...'
             self.int_types[vx] = ('lj/cut', 0.0)
     
         antisym_completion = {}

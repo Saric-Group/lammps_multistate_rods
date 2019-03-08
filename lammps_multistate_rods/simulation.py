@@ -93,7 +93,7 @@ class Simulation(object):
             raise Exception('Unknown/invalid int_type parameter: '+ str(int_type))
             
     def setup(self, region_ID, atom_style=None, type_offset=0, extra_pair_styles=[], overlay=False,
-              bond_offset=0, extra_bond_styles=[], *args):
+              bond_offset=0, extra_bond_styles=[], everything_else=[]):
         '''
         This method sets-up all the styles (atom, pair, bond), the simulation box and all the
         data need to simulate the rods (mass, coeffs, etc.).
@@ -118,8 +118,8 @@ class Simulation(object):
         define them in LAMMPS, e.g. ("harmonic", "fene", ...)
         NOTE: style "zero" is already defined by default
         
-        args : everything else will be passed verbatim as a single space-separated string
-        to the LAMMPs "box_create" command (e.g. "angle/types", "extra/???/per/atom" etc.)
+        everything_else : a list containing additional arguments that will be passed verbatim as a single
+        space-separated string to the LAMMPs "box_create" command (e.g. "angle/types", "extra/???/per/atom" etc.)
         '''
         # set instance variables
         self.type_offset = type_offset
@@ -147,21 +147,23 @@ class Simulation(object):
         self.py_lmp.bond_style('hybrid', 'zero', ' '.join(map(str, extra_bond_styles)))
         
         # create region_ID (with all the parameters)
-        create_box_args = ' '.join(map(str,args)).split()
+        create_box_args = ' '.join(map(str,everything_else)).split()
         try:
             ebpa_index = create_box_args.index('extra/bond/per/atom')
+        except ValueError:
+            create_box_args.extend(['extra/bond/per/atom', '2'])
+        else:
             ebpa = int(create_box_args[ebpa_index+1])
             if ebpa < 2:
                 create_box_args[ebpa_index+1] = '2'
-        except ValueError:
-            create_box_args.extend(['extra/bond/per/atom', '2'])
         try:
             espa_index = create_box_args.index('extra/special/per/atom')
+        except ValueError:
+            create_box_args.extend(['extra/special/per/atom', '6'])
+        else:
             espa = int(create_box_args[espa_index+1])
             if espa < 6:
                 create_box_args[espa_index+1] = '6'
-        except ValueError:
-            create_box_args.extend(['extra/special/per/atom', '6'])
         
         self.py_lmp.create_box(type_offset + self.model.max_bead_type, region_ID, "bond/types",
                                1 + bond_offset, ' '.join(create_box_args))
@@ -280,18 +282,20 @@ class Simulation(object):
         named arguments in the following form:
             keyword = (value_1, value_2, ...)
         '''
-        keyword_options = ""
-        for key, values in kwargs.iteritems():
-            keyword_options += key
-            for value in values:
-                keyword_options += " " + str(value)
-            keyword_options += "\t"
+        keyword_options = []
+        for key, value in kwargs.iteritems():
+            keyword_options.append(str(key))
+            try:
+                keyword_options.extend(map(str, value))
+            except TypeError:
+                keyword_options.append(str(value))
+        keyword_options = ' '.join(keyword_options)
         
         ensemble = ensemble.strip().lower()
         fix_name = "rigid/"+ensemble+"/small" if ensemble != "" else "rigid/small"
     
-        self.py_lmp.fix("rod_dynamics", Simulation.rods_group, fix_name, "molecule",
-                            "mol", self.model.rod_states[0], keyword_options) 
+        self.py_lmp.fix("rod_dynamics", Simulation.rods_group, fix_name,
+                        "molecule", keyword_options) 
         self.py_lmp.neigh_modify("exclude", "molecule/intra", Simulation.rods_group)
     
 #        if (gcmc != None):

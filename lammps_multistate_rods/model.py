@@ -26,7 +26,7 @@ class Model(object):
     def __init__(self, config_file_path):
         # ROD PROPERTIES (available to set in the config file)
         rod_radius = 1.0 #default
-        rod_length = 8.0*rod_radius #default
+        rod_length = None #default is 8*rod_radius (after rod_radius is (re)defined)
         rod_mass = 1.0 #default
         rod_states = None #example: ('soluble_state', 'beta_state')
         num_states = None #dependent on "rod_states"
@@ -34,9 +34,9 @@ class Model(object):
             #example of elements:
             # state_structures[0] = '1-1-1-1-1-1-2|3-3-3-3' # '1' is inert body type, '3' is inert side-patch type
             # state_structures[1] = '1-1-1-1-1-1-1|4-4-4-4' # '2' is active body type, '4' is active side-patch type
-        patch_angles = (0.0,) #default
-        patch_bead_radii = None
-        patch_bead_sep = None
+        patch_angles = []
+        patch_bead_radii = []
+        patch_bead_sep = []
         patch_bulge_out = 0.0 #default
         # INTERACTION PROPERTIES (available to set in the config file)
         int_types = None # interaction types (with parameters)
@@ -94,7 +94,7 @@ class Model(object):
                 command = ''
         
         self.rod_radius = rod_radius
-        self.rod_length = rod_length
+        self.rod_length = 8.0*rod_radius if (rod_length is None) else rod_length
         self.rod_mass = rod_mass
         self.rod_states = rod_states
         self.num_states = num_states

@@ -96,7 +96,7 @@ class Simulation(object):
               bond_offset=0, extra_bond_styles=[], everything_else=[]):
         '''
         This method sets-up all the styles (atom, pair, bond), the simulation box and all the
-        data need to simulate the rods (mass, coeffs, etc.).
+        data needed to simulate the rods (mass, coeffs, etc.).
         
         region_ID : the region ID to use in the "create_box" command
         

@@ -9,6 +9,7 @@ Created on 11 Jan 2019
 '''
 
 import re
+from lammps_multistate_rods import Simulation
 
 def keyword_parse_pattern(lammps_keyword):
     '''
@@ -16,12 +17,14 @@ def keyword_parse_pattern(lammps_keyword):
     
     Currently supported: id, type, mol, c_rod_cluster, x, y, z
     '''
-    if lammps_keyword in ('id','type','mol','c_rod_cluster'):
+    if lammps_keyword in ('id','type','mol','c_'+Simulation.cluster_compute):
         return r'(\d+)'
     elif lammps_keyword in ('x','y','z'):
         return r'([-\+\d\.eE]+)'
     else:
-        raise Exception('Unsupported lammps_keyword ({}) in dump file!')
+        print 'WARNING: Unsupported lammps_keyword ({}) in dump file!'.format(
+            lammps_keyword)
+        return r'(\S+)' #one or more non-whitespace characters
     
 def parse_dump_file(dump_file_path):
     '''

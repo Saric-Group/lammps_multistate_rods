@@ -10,7 +10,8 @@ Created on 16 May 2018
 
 import numpy as np
 import re
-from lammps_multistate_rods.tools.parsing import keyword_parse_pattern
+from parsing import keyword_parse_pattern
+from lammps_multistate_rods import Simulation
 
 def get_cluster_data(raw_data, every, model, type_offset):
     '''
@@ -65,7 +66,7 @@ def get_cluster_data(raw_data, every, model, type_offset):
             for key, value in zip(data_structure, parse_pattern.match(line).groups()):
                 line_vars[key] = value
             mol_id = int(line_vars['mol'])
-            cluster_id = int(line_vars['c_rod_cluster'])
+            cluster_id = int(line_vars['c_'+Simulation.cluster_compute])
             if current_mol_id is None:
                 current_mol_id = mol_id
             elif mol_id != current_mol_id:

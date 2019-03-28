@@ -59,13 +59,17 @@ def parse_dump_file(dump_file_path):
             elif i == 9:
                 data_structure = line.split()[2:]
                 data = []
-               
-            elif i >= min_row and i <= max_row:
+                
+            elif i >= min_row and i < max_row:
                 data.append(line)
-            
-            if i == max_row:
+                
+            elif i == max_row:
+                data.append(line)
                 yield (timestep, box_bounds, data_structure, data)
                 i = 0
+            else:
+                #print i,
+                pass
 
 def write_dump_snapshot(timestep, box_bounds, data_structure, data, output_path):
     '''

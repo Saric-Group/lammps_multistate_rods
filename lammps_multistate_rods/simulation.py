@@ -105,10 +105,13 @@ class Simulation(object):
         
         type_offset : the number of particle types that will be used for non-rod particles
         
-        extra_pair_styles : an iterable consisted of pair style names and parameters needed to
-        define them in LAMMPS, e.g. ("lj/cut", 3.0, "lj/long/dipole/long", "cut", "long", 5.0, ...)
-        WARNING: don't use the same styles already used in the config file!
-        NOTE: the styles from the config file are automatically set with "shift yes"
+        extra_pair_styles : an iterable consisted of tuples of pair style names and parameters
+        needed to define them in LAMMPS, e.g. (("lj/cut", 3.0), ("lj/long/dipole/long",
+        "cut long 5.0"), ...)
+        WARNING: if using the styles already defined in the model .cfg file the default
+        model parameters (e.g. global cutoff) will be disregarded for the ones given here,
+        which might cause unexpected behaviour
+        NOTE: the styles from the model .cfg file are automatically set with "shift yes"
         
         overlay : if True the "hybrid/overlay" pair_style will be used, instead of the default "hybrid"
         
@@ -136,10 +139,17 @@ class Simulation(object):
         self.py_lmp.atom_style(atom_style)
         
         pair_styles_cmd = ['hybrid/overlay' if overlay else 'hybrid']
-        self.pair_styles = set([int_type[0] for int_type in self.model.int_types.values()])
+        pair_styles_cmd.extend([' '.join(extra_pair_style)
+                                for extra_pair_style in extra_pair_styles])
+        extra_pair_style_names = [extra_pair_style[0].strip()
+                                  for extra_pair_style in extra_pair_styles]
+        self.pair_styles = set([int_type[0].strip()
+                                for int_type in self.model.int_types.values()])
         for pair_style in self.pair_styles:
+            if pair_style in extra_pair_style_names:
+                continue
             pair_styles_cmd.append('{:s} {:f}'.format(pair_style, self.model.global_cutoff))
-        pair_styles_cmd.append(' '.join(map(str, extra_pair_styles)))
+        
         self.py_lmp.pair_style(' '.join(pair_styles_cmd))
         for pair_style in self.pair_styles:
             self.py_lmp.pair_modify('pair', pair_style, 'shift yes')

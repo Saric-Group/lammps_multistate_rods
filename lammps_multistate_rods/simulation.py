@@ -44,9 +44,8 @@ class Simulation(object):
         clusters = <number> : the distance between bead centers that qualifies two beads (and
         consequently whole rods) to be in the same cluster. If it is > 0.0 a LAMMPS group will
         be defined that will contain all active beads (those that have non-vx interactions; this
-        slows down the simulation) and a compute that gives all active beads a label corresponding
-        to the label for a cluster of rods (which can be dumped with "c_rod_cluster") will be made
-        available to the user through the "cluster_compute" class variable 
+        slows down the simulation) and a compute that gives all active beads a cluster label will
+        be made available to the user through the "cluster_compute" class variable. 
         '''       
         if not isinstance(py_lmp, PyLammps):
             raise Exception("py_lmp has to be an instance of lammps.PyLammps!")

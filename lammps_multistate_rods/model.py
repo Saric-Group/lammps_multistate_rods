@@ -12,6 +12,7 @@ from math import cos, sin, pi
 import numbers
 
 vx = 'vx'
+global_context = {'__builtins__': None, 'vx': vx} #for eval & exec (to not be able to do funny stuff)
 
 class Model(object):
     '''
@@ -24,37 +25,38 @@ class Model(object):
     '''
 
     def __init__(self, config_file_path):
+        local_context = {} #for controlled and correct eval & exec
         # ROD PROPERTIES (available to set in the config file)
-        rod_radius = 1.0 #default
-        rod_length = None #default is 8*rod_radius (after rod_radius is (re)defined)
-        rod_mass = 1.0 #default
-        rod_states = None #example: ('soluble_state', 'beta_state')
-        num_states = None #dependent on "rod_states"
-        state_structures = None #dependent on "rod_states"
+        local_context['rod_radius'] = 1.0 #default
+        local_context['rod_length'] = None #default is 8*rod_radius (after rod_radius is (re)defined)
+        local_context['rod_mass'] = 1.0 #default
+        local_context['rod_states'] = None #example: ('soluble_state', 'beta_state')
+        local_context['num_states'] = None #dependent on "rod_states"
+        local_context['state_structures'] = None #dependent on "rod_states"
             #example of elements:
             # state_structures[0] = '1-1-1-1-1-1-2|3-3-3-3' # '1' is inert body type, '3' is inert side-patch type
             # state_structures[1] = '1-1-1-1-1-1-1|4-4-4-4' # '2' is active body type, '4' is active side-patch type
-        patch_angles = []
-        patch_bead_radii = []
-        patch_bead_sep = []
-        patch_bulge_out = 0.0 #default
+        local_context['patch_angles'] = []
+        local_context['patch_bead_radii'] = []
+        local_context['patch_bead_sep'] = []
+        local_context['patch_bulge_out'] = 0.0 #default
         # INTERACTION PROPERTIES (available to set in the config file)
-        int_types = None # interaction types (with parameters)
+        local_context['int_types'] = None # interaction types (with parameters)
             #example:
             # int_types = {'patch':('cosine/squared', 1.75*rod_radius),
             #              'tip':('cosine/squared', 1.0*rod_radius, 'wca'),
             #              'vx':('lj/cut', 0.0)}
-        eps = {} # interaction strengths between bead types
+        local_context['eps'] = {} # interaction strengths between bead types
             #example of elements:
             # eps[(1,1)] = eps[(1,2)] = eps[(1,3)] = eps[(1,4)] = (5.0, 'vx')
             # eps[(2,3)] = eps[(3,3)] = eps[(3,4)] = (5.0, 'vx')
             # eps[(2,2)] = (3.25, 'tip') # soluble-soluble tip interaction
             # eps[(2,4)] = (6.5, 'patch') # soluble-beta interaction
             # eps[(4,4)] = (30.0, 'patch') # beta-beta interaction
-        trans_penalty = {} # transition penalties between states
+        local_context['trans_penalty'] = {} # transition penalties between states
             #example of elements:
             # trans_penalty[(0,1)] = 15.0 # soluble-beta transition
-            
+        
         with open(config_file_path,'r') as config_file:
             command = ''
             for line in config_file:
@@ -72,58 +74,43 @@ class Model(object):
                 assign = parts[0].strip()
                 expr = parts[1].strip()
                 if assign == 'rod_states':
-                    rod_states = eval(expr)
-                    if not isinstance(rod_states, (tuple, list)):
-                        raise Exception("'rod_states' has to be either a tuple or a list!")
-                    num_states = len(rod_states)
-                    state_structures = ['']*num_states
-#                 elif assign in ('rod_radius', 'rod_length', 'rod_mass',
-#                                 'patch_angles', 'patch_bead_radii', 'patch_bead_sep',
-#                                 'patch_bulge_out', 'int_types'):
-#                     exec(command)
-#                 elif re.compile(r'state_structures\[\d+\]').match(assign) != None:
-#                     exec(command)
-#                 elif re.compile(r'eps\[\(\d+,\d+\)\]').match(assign) != None:
-#                     exec(command)
-#                 elif re.compile(r'trans_penalty\[\(\d+,\d+\)\]').match(assign) != None:
-#                     exec(command)
-#                 else:
-#                     raise Exception('ERROR: Unknown config parameter encountered (' + line + ')')
+                    local_context['rod_states'] = eval(expr, global_context, local_context)
+                    if not isinstance(local_context['rod_states'], (tuple, list)):
+                        raise Exception('"rod_states" has to be either a tuple or a list!')
+                    local_context['num_states'] = len(local_context['rod_states'])
+                    local_context['state_structures'] = ['']*local_context['num_states']
                 else: #allow whatever command, support variables to be defined etc.
-                    exec(command)
+                    exec(command, global_context, local_context)
                 command = ''
         
-        self.rod_radius = rod_radius
-        self.rod_length = 8.0*rod_radius if (rod_length is None) else rod_length
-        self.rod_mass = rod_mass
-        self.rod_states = rod_states
-        self.num_states = num_states
-        self.state_structures = [ [ [ int(bead_type) for bead_type in patch.split('-')]
-                                    for patch in state_struct.split('|')]
-                                  for state_struct in state_structures]
-#         self.state_structures = map(lambda y: 
-#                                     map(lambda x: 
-#                                         map(int, x.split('-')),
-#                                     y.split('|')),
-#                                     state_structures)
+        self.rod_radius = local_context['rod_radius']
+        self.rod_length = local_context['rod_length']
+        if self.rod_length is None:
+            self.rod_length = 8.0*self.rod_radius
+        self.rod_mass = local_context['rod_mass']
+        self.rod_states = local_context['rod_states']
+        self.num_states = local_context['num_states']
+        self.state_structures = map(lambda y: map(lambda x: map(int, x.split('-')),
+                                                  y.split('|')),
+                                    local_context['state_structures'])
         self.body_beads = None #dependent on "state_structures"
         self.body_bead_types = None #dependent on "state_structures"
         self.body_bead_overlap = None
         self.num_patches = None #dependent on "state_structures"
-        self.patch_angles = patch_angles
-        self.patch_bead_radii = patch_bead_radii
+        self.patch_angles = local_context['patch_angles']
+        self.patch_bead_radii = local_context['patch_bead_radii']
         self.patch_beads = None #dependent on "state_structures"
         self.patch_bead_types = None #dependent on "state_structures"
-        self.patch_bead_sep = patch_bead_sep
-        self.patch_bulge_out = patch_bulge_out
+        self.patch_bead_sep = local_context['patch_bead_sep']
+        self.patch_bulge_out = local_context['patch_bulge_out']
         self.total_beads = None #dependent on "state_structures"
         self.all_bead_types = None #dependent on "state_structures"
         self.active_bead_types = None #dependent on "state_structures" & "eps"
         self.max_bead_type = None #dependent on "state_structures"
-        self.int_types = int_types
-        self.global_cutoff = 3*rod_radius
-        self.eps = eps
-        self.trans_penalty = trans_penalty
+        self.int_types = local_context['int_types']
+        self.global_cutoff = 3*self.rod_radius
+        self.eps = local_context['eps']
+        self.trans_penalty = local_context['trans_penalty']
         self.transitions = None #dependent on "trans_penalty";
             # a list by state_ID of lists of (state_ID, penalty) pairs for all allowed transitions
         

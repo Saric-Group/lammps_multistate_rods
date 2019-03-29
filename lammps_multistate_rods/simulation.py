@@ -138,7 +138,7 @@ class Simulation(object):
         self.py_lmp.atom_style(atom_style)
         
         pair_styles_cmd = ['hybrid/overlay' if overlay else 'hybrid']
-        pair_styles_cmd.extend([' '.join(extra_pair_style)
+        pair_styles_cmd.extend([' '.join([str(elem) for elem in extra_pair_style])
                                 for extra_pair_style in extra_pair_styles])
         extra_pair_style_names = [extra_pair_style[0].strip()
                                   for extra_pair_style in extra_pair_styles]

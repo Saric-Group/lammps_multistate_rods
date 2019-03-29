@@ -12,7 +12,15 @@ from math import cos, sin, pi
 import numbers
 
 vx = 'vx'
-global_context = {'__builtins__': None, 'vx': vx} #for eval & exec (to not be able to do funny stuff)
+_globcontext = {'__builtins__': None, 'vx': vx} #for eval & exec (to not be able to do funny stuff)
+
+class Params(object):
+    '''
+    A class only to hold parameters as object variables, for easier/nicer access.
+    '''
+    def __init__(self, param_dict=None):
+        if param_dict != None:
+            self.__dict__.update(param_dict)
 
 class Model(object):
     '''
@@ -25,35 +33,35 @@ class Model(object):
     '''
 
     def __init__(self, config_file_path):
-        local_context = {} #for controlled and correct eval & exec
+        cfg_params = Params() #for controlled and correct eval & exec
         # ROD PROPERTIES (available to set in the config file)
-        local_context['rod_radius'] = 1.0 #default
-        local_context['rod_length'] = None #default is 8*rod_radius (after rod_radius is (re)defined)
-        local_context['rod_mass'] = 1.0 #default
-        local_context['rod_states'] = None #example: ('soluble_state', 'beta_state')
-        local_context['num_states'] = None #dependent on "rod_states"
-        local_context['state_structures'] = None #dependent on "rod_states"
+        cfg_params.rod_radius = 1.0 #default
+        cfg_params.rod_length = None #default is 8*rod_radius (after rod_radius is (re)defined)
+        cfg_params.rod_mass = 1.0 #default
+        cfg_params.rod_states = None #example: ('soluble_state', 'beta_state')
+        cfg_params.num_states = None #dependent on "rod_states"
+        cfg_params.state_structures = None #dependent on "rod_states"
             #example of elements:
             # state_structures[0] = '1-1-1-1-1-1-2|3-3-3-3' # '1' is inert body type, '3' is inert side-patch type
             # state_structures[1] = '1-1-1-1-1-1-1|4-4-4-4' # '2' is active body type, '4' is active side-patch type
-        local_context['patch_angles'] = []
-        local_context['patch_bead_radii'] = []
-        local_context['patch_bead_sep'] = []
-        local_context['patch_bulge_out'] = 0.0 #default
+        cfg_params.patch_angles = []
+        cfg_params.patch_bead_radii = []
+        cfg_params.patch_bead_sep = []
+        cfg_params.patch_bulge_out = 0.0 #default
         # INTERACTION PROPERTIES (available to set in the config file)
-        local_context['int_types'] = None # interaction types (with parameters)
+        cfg_params.int_types = None # interaction types (with parameters)
             #example:
             # int_types = {'patch':('cosine/squared', 1.75*rod_radius),
             #              'tip':('cosine/squared', 1.0*rod_radius, 'wca'),
             #              'vx':('lj/cut', 0.0)}
-        local_context['eps'] = {} # interaction strengths between bead types
+        cfg_params.eps = {} # interaction strengths between bead types
             #example of elements:
             # eps[(1,1)] = eps[(1,2)] = eps[(1,3)] = eps[(1,4)] = (5.0, 'vx')
             # eps[(2,3)] = eps[(3,3)] = eps[(3,4)] = (5.0, 'vx')
             # eps[(2,2)] = (3.25, 'tip') # soluble-soluble tip interaction
             # eps[(2,4)] = (6.5, 'patch') # soluble-beta interaction
             # eps[(4,4)] = (30.0, 'patch') # beta-beta interaction
-        local_context['trans_penalty'] = {} # transition penalties between states
+        cfg_params.trans_penalty = {} # transition penalties between states
             #example of elements:
             # trans_penalty[(0,1)] = 15.0 # soluble-beta transition
         
@@ -74,43 +82,43 @@ class Model(object):
                 assign = parts[0].strip()
                 expr = parts[1].strip()
                 if assign == 'rod_states':
-                    local_context['rod_states'] = eval(expr, global_context, local_context)
-                    if not isinstance(local_context['rod_states'], (tuple, list)):
+                    cfg_params.rod_states = eval(expr, _globcontext, vars(cfg_params))
+                    if not isinstance(cfg_params.rod_states, (tuple, list)):
                         raise Exception('"rod_states" has to be either a tuple or a list!')
-                    local_context['num_states'] = len(local_context['rod_states'])
-                    local_context['state_structures'] = ['']*local_context['num_states']
+                    cfg_params.num_states = len(cfg_params.rod_states)
+                    cfg_params.state_structures = ['']*cfg_params.num_states
                 else: #allow whatever command, support variables to be defined etc.
-                    exec(command, global_context, local_context)
+                    exec(command, _globcontext, vars(cfg_params))
                 command = ''
         
-        self.rod_radius = local_context['rod_radius']
-        self.rod_length = local_context['rod_length']
+        self.rod_radius = cfg_params.rod_radius
+        self.rod_length = cfg_params.rod_length
         if self.rod_length is None:
             self.rod_length = 8.0*self.rod_radius
-        self.rod_mass = local_context['rod_mass']
-        self.rod_states = local_context['rod_states']
-        self.num_states = local_context['num_states']
+        self.rod_mass = cfg_params.rod_mass
+        self.rod_states = cfg_params.rod_states
+        self.num_states = cfg_params.num_states
         self.state_structures = map(lambda y: map(lambda x: map(int, x.split('-')),
                                                   y.split('|')),
-                                    local_context['state_structures'])
+                                    cfg_params.state_structures)
         self.body_beads = None #dependent on "state_structures"
         self.body_bead_types = None #dependent on "state_structures"
         self.body_bead_overlap = None
         self.num_patches = None #dependent on "state_structures"
-        self.patch_angles = local_context['patch_angles']
-        self.patch_bead_radii = local_context['patch_bead_radii']
+        self.patch_angles = cfg_params.patch_angles
+        self.patch_bead_radii = cfg_params.patch_bead_radii
         self.patch_beads = None #dependent on "state_structures"
         self.patch_bead_types = None #dependent on "state_structures"
-        self.patch_bead_sep = local_context['patch_bead_sep']
-        self.patch_bulge_out = local_context['patch_bulge_out']
+        self.patch_bead_sep = cfg_params.patch_bead_sep
+        self.patch_bulge_out = cfg_params.patch_bulge_out
         self.total_beads = None #dependent on "state_structures"
         self.all_bead_types = None #dependent on "state_structures"
         self.active_bead_types = None #dependent on "state_structures" & "eps"
         self.max_bead_type = None #dependent on "state_structures"
-        self.int_types = local_context['int_types']
+        self.int_types = cfg_params.int_types
         self.global_cutoff = 3*self.rod_radius
-        self.eps = local_context['eps']
-        self.trans_penalty = local_context['trans_penalty']
+        self.eps = cfg_params.eps
+        self.trans_penalty = cfg_params.trans_penalty
         self.transitions = None #dependent on "trans_penalty";
             # a list by state_ID of lists of (state_ID, penalty) pairs for all allowed transitions
         

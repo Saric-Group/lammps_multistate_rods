@@ -8,14 +8,13 @@ Created on 16 May 2018
 @author: Eugen Rožić
 '''
 
-import numpy as np
 import re
 from parsing import keyword_parse_pattern
 from lammps_multistate_rods import Simulation
 
-def get_cluster_data(raw_data, every, model, type_offset):
+def get_cluster_data(raw_data, every, model, type_offset, compute_ID=None):
     '''
-    Extracts cluster data from the raw dump file data.
+    Extracts cluster data from the raw dump file data (expected to be sorted by particle ID).
     
     raw_data : output of the "parse_dump_file" method
     
@@ -25,9 +24,12 @@ def get_cluster_data(raw_data, every, model, type_offset):
     
     type_offset : the type offset for the rod model in the simulation that generated the dump file
     
+    compute_ID: the ID of the LAMMPS cluster compute (default is "Simulation.cluster_compute")
+    
     returns : a triplet of box dimensions, a list of timesteps and a corresponding list of
     snapshot_data, where "snapshot_data" is a dictionary by cluster ID's whose values are lists of
-    (rod/mol ID, rod state ID) pairs
+    (rod/mol ID, rod state ID) pairs. If rod state ID is "None" the molecule is not a rod from the
+    given model.
     
     NOTE: cluster ID's are set to the lowest rod/mol ID of each cluster, not the ones that are in
     the dump file
@@ -38,12 +40,15 @@ def get_cluster_data(raw_data, every, model, type_offset):
     
     def state_types_to_id(state_types):
         '''
-        Returns rod state id from its structure (list of atom types)
+        Returns rod state id from its structure (list of atom types), or None
         '''
         for i in range(model.num_states):
             if state_types == states_types[i]:
                 return i
         return None
+    
+    if compute_ID == None:
+        compute_ID = Simulation.cluster_compute
     
     count = 0
     box_size = None
@@ -66,20 +71,18 @@ def get_cluster_data(raw_data, every, model, type_offset):
             for key, value in zip(data_structure, parse_pattern.match(line).groups()):
                 line_vars[key] = value
             mol_id = int(line_vars['mol'])
-            cluster_id = int(line_vars['c_'+Simulation.cluster_compute])
+            if mol_id == 0:
+                continue #just skip non-molecule particles...
+            cluster_id = int(line_vars['c_'+compute_ID])
             if current_mol_id is None:
                 current_mol_id = mol_id
             elif mol_id != current_mol_id:
-                current_rod_state = state_types_to_id(current_rod)
-                if current_rod_state != None:
+                if current_cluster_id > 0:
+                    current_rod_state = state_types_to_id(current_rod)
                     try:
                         snapshot_data[current_cluster_id].append((current_mol_id, current_rod_state))
                     except KeyError:
                         snapshot_data[current_cluster_id] = [(current_mol_id, current_rod_state)]
-                else:
-                # means this molecule is not a lammps_multistate_rod "rod"
-                # this also takes care of mol_id = 0 (for non-molecule particles)
-                    pass
                 current_mol_id = mol_id
                 current_cluster_id = 0
                 current_rod = []
@@ -87,13 +90,10 @@ def get_cluster_data(raw_data, every, model, type_offset):
             if cluster_id > current_cluster_id:
                 current_cluster_id = cluster_id    
         current_rod_state = state_types_to_id(current_rod)
-        if current_rod_state != None:
-            try:
-                snapshot_data[current_cluster_id].append((current_mol_id, current_rod_state))
-            except KeyError:
-                snapshot_data[current_cluster_id] = [(current_mol_id, current_rod_state)]
-        else:
-            pass
+        try:
+            snapshot_data[current_cluster_id].append((current_mol_id, current_rod_state))
+        except KeyError:
+            snapshot_data[current_cluster_id] = [(current_mol_id, current_rod_state)]
                 
         #switch keys to correspond to lowest mol_id in each cluster
         new_snapshot_data = {}
@@ -141,59 +141,63 @@ def composition_by_states(cluster_data):
     cluster_data : a list of "snapshot_data", dictionaries by cluster ID whose values are lists of
     (rod/mol ID, rod state ID) pairs
     
-    return : a list of dictionaries by cluster ID whose values are lists of numbers of rods of
-    each state in each of the clusters
+    return : a list of dictionaries by cluster ID whose values are dictionaries by state ID of
+    the numbers of rods in the corresponding state in the cluster.
     '''
     ret = [None]*len(cluster_data)
     i = 0
     for snapshot_data in cluster_data:
         ret_data = {}
         for cluster_ID, cluster in snapshot_data.iteritems():
-            max_state_ID = max(map(lambda x: x[1], cluster))
-            cluster_composition = [0]*max_state_ID
+            cluster_composition = {}
             for elem in cluster:
-                cluster_composition[elem[1]] += 1
+                try:
+                    cluster_composition[elem[1]] += 1
+                except KeyError:
+                    cluster_composition[elem[1]] = 1
             ret_data[cluster_ID] = cluster_composition
         ret[i] = ret_data
         i += 1
     return ret
 
-def sizes_by_cluster_type(cluster_data):
-    '''
-    cluster_data : a list of "snapshot_data", dictionaries by cluster ID whose values are lists of
-    (rod/mol ID, rod state ID) pairs
-    
-    return : a list of "cluster_sizes", dictionaries by cluster type (same as rod state ID if
-    homogeneous, otherwise -1) whose values are pairs of (cluster_sizes, occurrences) lists, and
-    a number equal to the maximum cluster size across all timesteps and types.
-    '''
-    ret = [None]*len(cluster_data)
-    max_size = 0
-    i = 0
-    for snapshot_data in cluster_data:
-        cluster_sizes = {}
-        for cluster in snapshot_data.values():
-            cluster_type = cluster[0][1] # cluster_type is the same as state id of rods if they are all in the same state
-            for elem in cluster:
-                if elem[1] != cluster_type:
-                    cluster_type = -1
-            
-            cluster_size = len(cluster)
-            try:
-                cluster_sizes[cluster_type].append(cluster_size)
-            except KeyError:
-                cluster_sizes[cluster_type] = [cluster_size]
-            
-            if cluster_size > max_size:
-                max_size = cluster_size
-    
-        for cluster_type, value in cluster_sizes.iteritems():
-            cluster_sizes[cluster_type] = np.unique(value, return_counts=True)
-        
-        ret[i] = cluster_sizes
-        i += 1
-          
-    return ret, max_size
+# arbitrary definition of cluster type, questionable usefulness...
+#
+# def sizes_by_cluster_type(cluster_data):
+#     '''
+#     cluster_data : a list of "snapshot_data", dictionaries by cluster ID whose values are lists of
+#     (rod/mol ID, rod state ID) pairs
+#     
+#     return : a list of "cluster_sizes", dictionaries by cluster type (same as rod state ID if
+#     homogeneous, otherwise -1) whose values are pairs of (cluster_sizes, occurrences) lists, and
+#     a number equal to the maximum cluster size across all timesteps and types.
+#     '''
+#     ret = [None]*len(cluster_data)
+#     max_size = 0
+#     i = 0
+#     for snapshot_data in cluster_data:
+#         cluster_sizes = {}
+#         for cluster in snapshot_data.values():
+#             cluster_type = cluster[0][1] # cluster_type is the same as state id of rods if they are all in the same state
+#             for elem in cluster:
+#                 if elem[1] != cluster_type:
+#                     cluster_type = -1
+#             
+#             cluster_size = len(cluster)
+#             try:
+#                 cluster_sizes[cluster_type].append(cluster_size)
+#             except KeyError:
+#                 cluster_sizes[cluster_type] = [cluster_size]
+#             
+#             if cluster_size > max_size:
+#                 max_size = cluster_size
+#     
+#         for cluster_type, value in cluster_sizes.iteritems():
+#             cluster_sizes[cluster_type] = np.unique(value, return_counts=True)
+#         
+#         ret[i] = cluster_sizes
+#         i += 1
+#           
+#     return ret, max_size
 
 def free_rods(cluster_data, monomer_states=None, total=True):
     '''

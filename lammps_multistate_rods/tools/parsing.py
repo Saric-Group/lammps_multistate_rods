@@ -31,15 +31,17 @@ def parse_dump_file(dump_file_path):
     This method is a generator that reads a LAMMPS dump file with one or more simulation
     snapshots and yields data for one snapshot at a time.
     
-    returns : a (timestep, box_bounds, data_structure, data) quadruplet;
+    returns : a (timestep, box_bounds, data_structure, data) quadruplet per snapshot;
         "box_bounds" is a triplet of (lower, upper) bound values, "data_structure" is a
         list of LAMMPS keywords that describes the contents of each line and "data" is
-        a list of verbatim lines from the dump file for a single snapshot 
+        a list of dictionaries (one per line) with "data_structure" elements as keys.
     '''
     with open(dump_file_path, 'r') as dump_file:
         i = 0
         timestep = min_row = max_row = -1
         box_bounds = data_structure = data = None
+        bounds_pattern = re.compile(r'([-\+\d\.eE]+) ([-\+\d\.eE]+)')
+        data_pattern = None 
         for line in dump_file:
             i += 1
                     
@@ -52,31 +54,39 @@ def parse_dump_file(dump_file_path):
                 min_row = 10
                 box_bounds = []
             
-            elif i in (6,7,8) and len(box_bounds) < 3:
-                l_bound, r_bound = [float(match) for match in re.compile(r'([-\+\d\.eE]+) ([-\+\d\.eE]+)').match(line).groups()]
+            elif i in (6,7,8):
+                l_bound, r_bound = [float(match) for match in bounds_pattern.match(line).groups()]
                 box_bounds.append((l_bound, r_bound))
                 
             elif i == 9:
-                data_structure = line.split()[2:]
+                new_data_struct = line.split()[2:]
+                if data_structure == None:
+                    data_structure = new_data_struct
+                    data_pattern = re.compile(' '.join(map(keyword_parse_pattern, data_structure)))
+                elif new_data_struct != data_structure:
+                    raise Exception('ERROR (timestep {:d}): '\
+                                    'Output has to be uniform throughout a dump file!'.format(timestep))
                 data = []
                 
-            elif i >= min_row and i < max_row:
-                data.append(line)
-                
-            elif i == max_row:
-                data.append(line)
-                yield (timestep, box_bounds, data_structure, data)
-                i = 0
+            elif i >= min_row and i <= max_row:
+                line_vars = {}
+                for key, value in zip(data_structure, data_pattern.match(line).groups()):
+                    line_vars[key] = value
+                data.append(line_vars)
+                if i == max_row:
+                    yield (timestep, box_bounds, data_structure, data)
+                    i = 0
             else:
                 #print i,
                 pass
 
-def write_dump_snapshot(timestep, box_bounds, data_structure, data, output_path):
+def write_dump_snapshot(timestep, box_bounds, data_structure, data, output_path, append=False):
     '''
-    Appends the single snapshot data to the given file (or creates a new one) in
-    the proper LAMMPS dump format (i.e. inverse of "parse_dump_file").
+    Writes the single snapshot data to the given filepath in the proper LAMMPS dump format
+    (i.e. inverse of "parse_dump_file").
     '''
-    with open(output_path, 'a') as out_file:
+    mode = 'a' if append else 'w'
+    with open(output_path, mode) as out_file:
         out_file.write('ITEM: TIMESTEP\n')
         out_file.write('{:d}\n'.format(timestep))
         out_file.write('ITEM: NUMBER OF ATOMS\n')
@@ -85,5 +95,6 @@ def write_dump_snapshot(timestep, box_bounds, data_structure, data, output_path)
         for dimension in box_bounds:
             out_file.write('{:f} {:f}\n'.format(*dimension))
         out_file.write('ITEM: ATOMS {:s}\n'.format(' '.join(data_structure)))
-        for line in data:
-            out_file.write(line)
+        for line_vars in data:
+            line_parts = map(lambda key: str(line_vars[key]), data_structure)
+            out_file.write('{:s}\n'.format(' '.join(line_parts)))

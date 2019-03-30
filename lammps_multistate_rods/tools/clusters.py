@@ -8,8 +8,6 @@ Created on 16 May 2018
 @author: Eugen Rožić
 '''
 
-import re
-from parsing import keyword_parse_pattern
 from lammps_multistate_rods import Simulation
 
 def get_cluster_data(raw_data, every, model, type_offset, compute_ID=None):
@@ -26,7 +24,7 @@ def get_cluster_data(raw_data, every, model, type_offset, compute_ID=None):
     
     compute_ID: the ID of the LAMMPS cluster compute (default is "Simulation.cluster_compute")
     
-    returns : a triplet of box dimensions, a list of timesteps and a corresponding list of
+    returns : a triplet of a list of timesteps, a list of box dimensions and a corresponding list of
     snapshot_data, where "snapshot_data" is a dictionary by cluster ID's whose values are lists of
     (rod/mol ID, rod state ID) pairs. If rod state ID is "None" the molecule is not a rod from the
     given model.
@@ -51,7 +49,7 @@ def get_cluster_data(raw_data, every, model, type_offset, compute_ID=None):
         compute_ID = Simulation.cluster_compute
     
     count = 0
-    box_size = None
+    box_sizes = []
     timesteps = []
     cluster_data = []
     for timestep, box_bounds, data_structure, data in raw_data:
@@ -59,17 +57,12 @@ def get_cluster_data(raw_data, every, model, type_offset, compute_ID=None):
         if (count-1) % every != 0:
             continue
         timesteps.append(timestep)
-        if box_size == None:
-            box_size = map(lambda x: x[1]-x[0], box_bounds)
-        parse_pattern = re.compile(' '.join(map(keyword_parse_pattern, data_structure)))
-        line_vars = {}
+        box_sizes.append(map(lambda x: x[1]-x[0], box_bounds))
         snapshot_data = {}
         current_mol_id = None
         current_cluster_id = None
         current_rod = []
-        for line in data: 
-            for key, value in zip(data_structure, parse_pattern.match(line).groups()):
-                line_vars[key] = value
+        for line_vars in data:
             mol_id = int(line_vars['mol'])
             if mol_id == 0:
                 continue #just skip non-molecule particles...
@@ -101,36 +94,38 @@ def get_cluster_data(raw_data, every, model, type_offset, compute_ID=None):
             new_snapshot_data[value[0][0]] = value
         cluster_data.append(new_snapshot_data)
     
-    return box_size, timesteps, cluster_data
+    return timesteps, box_sizes, cluster_data
 
-def write_cluster_data(box_size, timesteps, cluster_data, output_path):
+def write_cluster_data(timesteps, box_sizes, cluster_data, output_path):
     '''
-    Writes the data returned by "get_cluster_data" to a file.
+    Used to write the data returned by "get_cluster_data" to a file, although the
+    "cluster_data" can be a corresponding length list of any kind of objects whose
+    string representation can be eval'd back to the object (e.g. dict, list, tuple, ...).
     '''
     with open(output_path, 'w') as out_file:
-        out_file.write('{:f} {:f} {:f}\n'.format(*box_size))
-        for timestep, snapshot_data in zip(timesteps, cluster_data):
-            out_file.write('{:^10d} | {:s}\n'.format(timestep, str(snapshot_data)))
+        for timestep, box_size, snapshot_data in zip(timesteps, box_sizes, cluster_data):
+            out_file.write('{:^10d} | {:s} | {:s}\n'.format(
+                timestep, str(box_size), str(snapshot_data)))
 
 def read_cluster_data(input_path):
     '''
-    Reads what was output with "write_cluster_data".
+    Reads what was outputed with "write_cluster_data".
     
-    returns : a triplet of box dimensions, a list of timesteps and a corresponding list
-    of snapshot_data, where "snapshot_data" is a dictionary by cluster ID's whose values
-    are lists of (rod/mol ID, rod state ID) pairs.
+    returns : a triplet of a list of timesteps, a list of box dimensions and a corresponding
+    list of objects (e.g. "snapshot_data", like the one returned by "get_cluster_data")
     '''
     timesteps = []
+    box_sizes = []
     cluster_data = []
     
     with open(input_path, 'r') as in_file:
-        box_size = map(float, in_file.readline().split())
         for line in in_file:
-            timestep, snapshot_data = line.split(' | ')
+            timestep, box_size, snapshot_data = line.split(' | ')
             timesteps.append(int(timestep))
+            box_sizes.append(eval(box_size))
             cluster_data.append(eval(snapshot_data))
             
-    return box_size, timesteps, cluster_data
+    return timesteps, box_sizes, cluster_data
         
 #========================================================================================
 # some possible ways of analysis of the raw_data extracted from a dump file...

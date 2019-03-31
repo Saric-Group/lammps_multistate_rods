@@ -72,9 +72,9 @@ def get_cluster_data(raw_data, every, model, type_offset, compute_ID=None):
             elif mol_id != current_mol_id:
                 if current_cluster_id > 0:
                     current_rod_state = state_types_to_id(current_rod)
-                    try:
+                    if current_cluster_id in snapshot_data:
                         snapshot_data[current_cluster_id].append((current_mol_id, current_rod_state))
-                    except KeyError:
+                    else:
                         snapshot_data[current_cluster_id] = [(current_mol_id, current_rod_state)]
                 current_mol_id = mol_id
                 current_cluster_id = 0
@@ -83,9 +83,9 @@ def get_cluster_data(raw_data, every, model, type_offset, compute_ID=None):
             if cluster_id > current_cluster_id:
                 current_cluster_id = cluster_id    
         current_rod_state = state_types_to_id(current_rod)
-        try:
+        if current_cluster_id in snapshot_data:
             snapshot_data[current_cluster_id].append((current_mol_id, current_rod_state))
-        except KeyError:
+        else:
             snapshot_data[current_cluster_id] = [(current_mol_id, current_rod_state)]
                 
         #switch keys to correspond to lowest mol_id in each cluster
@@ -146,53 +146,14 @@ def composition_by_states(cluster_data):
         for cluster_ID, cluster in snapshot_data.iteritems():
             cluster_composition = {}
             for elem in cluster:
-                try:
+                if elem[1] in cluster_composition:
                     cluster_composition[elem[1]] += 1
-                except KeyError:
+                else:
                     cluster_composition[elem[1]] = 1
             ret_data[cluster_ID] = cluster_composition
         ret[i] = ret_data
         i += 1
     return ret
-
-# arbitrary definition of cluster type, questionable usefulness...
-#
-# def sizes_by_cluster_type(cluster_data):
-#     '''
-#     cluster_data : a list of "snapshot_data", dictionaries by cluster ID whose values are lists of
-#     (rod/mol ID, rod state ID) pairs
-#     
-#     return : a list of "cluster_sizes", dictionaries by cluster type (same as rod state ID if
-#     homogeneous, otherwise -1) whose values are pairs of (cluster_sizes, occurrences) lists, and
-#     a number equal to the maximum cluster size across all timesteps and types.
-#     '''
-#     ret = [None]*len(cluster_data)
-#     max_size = 0
-#     i = 0
-#     for snapshot_data in cluster_data:
-#         cluster_sizes = {}
-#         for cluster in snapshot_data.values():
-#             cluster_type = cluster[0][1] # cluster_type is the same as state id of rods if they are all in the same state
-#             for elem in cluster:
-#                 if elem[1] != cluster_type:
-#                     cluster_type = -1
-#             
-#             cluster_size = len(cluster)
-#             try:
-#                 cluster_sizes[cluster_type].append(cluster_size)
-#             except KeyError:
-#                 cluster_sizes[cluster_type] = [cluster_size]
-#             
-#             if cluster_size > max_size:
-#                 max_size = cluster_size
-#     
-#         for cluster_type, value in cluster_sizes.iteritems():
-#             cluster_sizes[cluster_type] = np.unique(value, return_counts=True)
-#         
-#         ret[i] = cluster_sizes
-#         i += 1
-#           
-#     return ret, max_size
 
 def free_rods(cluster_data, monomer_states=None, total=True):
     '''

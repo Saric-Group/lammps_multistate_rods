@@ -80,7 +80,7 @@ def parse_dump_file(dump_file_path):
                 #print i,
                 pass
 
-def write_dump_snapshot(timestep, box_bounds, data_structure, data, output_path, append=False):
+def write_dump_snapshot((timestep, box_bounds, data_structure, data), output_path, append=False):
     '''
     Writes the single snapshot data to the given filepath in the proper LAMMPS dump format
     (i.e. inverse of "parse_dump_file").

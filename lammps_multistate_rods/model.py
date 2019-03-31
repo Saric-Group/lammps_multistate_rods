@@ -88,7 +88,7 @@ class Model(object):
                     cfg_params.num_states = len(cfg_params.rod_states)
                     cfg_params.state_structures = ['']*cfg_params.num_states
                 else: #allow whatever command, support variables to be defined etc.
-                    exec(command, _globcontext, vars(cfg_params))
+                    exec command in _globcontext, vars(cfg_params)
                 command = ''
         
         self.rod_radius = cfg_params.rod_radius

@@ -155,6 +155,34 @@ def composition_by_states(cluster_data):
         i += 1
     return ret
 
+def trajectories(cluster_data, rod_states=[1]):
+    '''
+    cluster_data : a list of "snapshot_data", dictionaries by cluster ID whose values are lists of
+    (rod/mol ID, rod state ID) pairs
+    
+    rod_states : counts only rods in these states
+    
+    return : a dictionary by cluster ID whose elements are lists of the size of the
+    corresponding cluster (betas only) in each of the timesteps sequentially.
+    '''
+    data_by_cluster_ID = {}
+    i = 0
+    for snapshot_data in cluster_data:
+        for cluster_ID, cluster in snapshot_data.iteritems():
+            #FIX this might be inefficient, at start there are all, later fewer... ?
+            if not cluster_ID in data_by_cluster_ID:
+                data_by_cluster_ID[cluster_ID] = [0]*i
+            eff_cluster_size = 0
+            for elem in cluster:
+                if elem[1] in rod_states:
+                    eff_cluster_size += 1
+            data_by_cluster_ID[cluster_ID].append(eff_cluster_size)
+        i += 1
+        for cluster_sizes in data_by_cluster_ID.values():
+            if len(cluster_sizes) < i:
+                cluster_sizes.append(0)
+    return data_by_cluster_ID
+
 def free_rods(cluster_data, monomer_states=None, total=True):
     '''
     cluster_data : a list of "snapshot_data", dictionaries by cluster ID whose values are lists of

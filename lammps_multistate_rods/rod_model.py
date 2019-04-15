@@ -22,7 +22,7 @@ class Params(object):
         if param_dict != None:
             self.__dict__.update(param_dict)
 
-class Model(object):
+class Rod_model(object):
     '''
     This class describes a model for a lammps_multistate_rods simulation, i.e. it holds all
     the information about the parameters of the rods and the simulation that are parsed from
@@ -101,20 +101,20 @@ class Model(object):
         self.state_structures = map(lambda y: map(lambda x: map(int, x.split('-')),
                                                   y.split('|')),
                                     cfg_params.state_structures)
-        self.body_beads = None #dependent on "state_structures"
-        self.body_bead_types = None #dependent on "state_structures"
-        self.body_bead_overlap = None
+        
         self.num_patches = None #dependent on "state_structures"
+        self.num_beads = None #dependent on "state_structures"
+        self.total_beads = None #dependent on "state_structures"
+        self.state_bead_types = None #dependent on "state_structures"
+        self.body_bead_types = None #dependent on "state_structures"
+        self.patch_bead_types = None #dependent on "state_structures"
+        self.active_bead_types = None #dependent on "state_structures" & "eps"
+        self.all_bead_types = None #dependent on "state_structures"
+        self.body_bead_overlap = None #dependent on "state_structures" &  "rod_length"
         self.patch_angles = cfg_params.patch_angles
         self.patch_bead_radii = cfg_params.patch_bead_radii
-        self.patch_beads = None #dependent on "state_structures"
-        self.patch_bead_types = None #dependent on "state_structures"
         self.patch_bead_sep = cfg_params.patch_bead_sep
         self.patch_bulge_out = cfg_params.patch_bulge_out
-        self.total_beads = None #dependent on "state_structures"
-        self.all_bead_types = None #dependent on "state_structures"
-        self.active_bead_types = None #dependent on "state_structures" & "eps"
-        self.max_bead_type = None #dependent on "state_structures"
         self.int_types = cfg_params.int_types
         self.global_cutoff = 3*self.rod_radius
         self.eps = cfg_params.eps
@@ -132,28 +132,28 @@ class Model(object):
             - the anti-symmetric partners in the "trans_penalty" matrix (trans_penalty[(n,m)] = -trans_penalty[(m,n)])
             - the "transitions" list from the "trans_penalty" dictionary
         '''
-        self.body_bead_types = set()
-        for state_struct in self.state_structures: #check all have the same "form"
-            
-            if self.body_beads == None:
-                self.body_beads = len(state_struct[0])
-            elif len(state_struct[0]) != self.body_beads:
-                raise Exception('All states must have the same number of body beads!')
-            
-            self.body_bead_types.update(state_struct[0])
-            
-            if self.patch_beads == None:
-                self.patch_beads = map(len, state_struct[1:])
-            elif map(len, state_struct[1:]) != self.patch_beads:
-                raise Exception('All states must have the same number of patch int sites!')
+        self.state_bead_types = [None]*self.num_states
+        for n in range(self.num_states):
+            state_struct = self.state_structures[n]
+            #check all have the same "form"            
+            if self.num_beads == None:
+                self.num_beads = map(len, state_struct)
+                self.num_patches = len(self.num_beads) - 1
+            elif map(len, state_struct) != self.num_beads:
+                raise Exception('All states must have the same number of beads in each patch!')
             
             if self.patch_bead_types == None:
-                self.patch_bead_types = [set() for _ in range(1, len(state_struct))]
-            for i in range(1, len(state_struct)):
-                self.patch_bead_types[i-1].update(state_struct[i])
+                self.body_bead_types = set()
+                self.patch_bead_types = [set() for _ in range(self.num_patches)]
+            self.body_bead_types.update(state_struct[0])
+            self.state_bead_types[n] = set(state_struct[0])
+            for i in range(self.num_patches):
+                self.patch_bead_types[i].update(state_struct[i+1])
+                self.state_bead_types[n].update(state_struct[i+1])
         
-        self.total_beads = self.body_beads + sum(self.patch_beads)
-        self.num_patches = len(self.patch_beads) 
+        self.total_beads = sum(self.num_beads)
+        self.body_bead_overlap = ((2*self.rod_radius*self.num_beads[0] - self.rod_length) /
+                                 (self.num_beads[0] - 1))
         
         if len(self.patch_angles) != self.num_patches:
             raise Exception("The length of patch_angles doesn't match the number of defined patches!")
@@ -166,14 +166,11 @@ class Model(object):
         elif len(self.patch_bulge_out) != self.num_patches:
             raise Exception("The length of patch_bulge_out doesn't match the number of defined patches!")
         
-        all_types = list(self.body_bead_types)
-        for i_patch_types in self.patch_bead_types:
-            all_types.extend(i_patch_types)
+        all_types = [bead_type
+                     for state_types in self.state_bead_types
+                     for bead_type in state_types]
         self.all_bead_types = sorted(set(all_types))
-#         if len(self.all_bead_types) != len(all_types):
-#             raise Exception("One bead type can appear only in the same patch or the body!")
         
-        self.max_bead_type = max(self.all_bead_types)
         self.active_bead_types = set()
         eps_temp = self.eps; self.eps = {}
         # rectify "eps"'s keys (type_1 < type_2)
@@ -184,21 +181,6 @@ class Model(object):
                 self.eps[bead_types] = eps_val
             else:
                 self.eps[(bead_types[1], bead_types[0])] = eps_val
-#         # fill all missing interactions with volume-exclusion
-#         i = 0
-#         while i < len(self.all_bead_types):
-#             type_1 = self.all_bead_types[i]
-#             j = i
-#             while j < len(self.all_bead_types):
-#                 type_2 = self.all_bead_types[j]
-#                 try:
-#                     self.eps[(type_1, type_2)]
-#                 except KeyError:
-#                     self.eps[(type_1, type_2)] = (self.vx_strength, vx)
-#                 j += 1
-#             i += 1
-        
-        self.body_bead_overlap = (2*self.rod_radius*self.body_beads - self.rod_length) / (self.body_beads - 1)
         
         try:
             self.int_types[vx]
@@ -236,13 +218,15 @@ class Model(object):
                 
                 mol_file.write("Coords\n\n")
                 n = 1
-                for i in range(self.body_beads):
-                    x = 0.0 - ((self.body_beads - 2*i - 1) / 2.)*(2*self.rod_radius - self.body_bead_overlap)
+                for i in range(self.num_beads[0]):
+                    x = 0.0 - (((self.num_beads[0] - 2*i - 1) / 2.) *
+                               (2*self.rod_radius - self.body_bead_overlap))
                     mol_file.write("{:2d} {:6.3f}  0.000  0.000\n".format(n, x))
                     n += 1
-                for k in range(len(self.patch_beads)):
-                    for i in range(self.patch_beads[k]):
-                        x = 0.0 - ((self.patch_beads[k] - 2*i - 1) / 2.)*(2*self.patch_bead_radii[k] + self.patch_bead_sep[k])
+                for k in range(self.num_patches):
+                    for i in range(self.num_beads[k+1]):
+                        x = 0.0 - (((self.num_beads[k+1] - 2*i - 1) / 2.) *
+                                   (2*self.patch_bead_radii[k] + self.patch_bead_sep[k]))
                         d = self.rod_radius - self.patch_bead_radii[k] + self.patch_bulge_out[k]
                         y = -sin(self.patch_angles[k]*2*pi/360)*d
                         z = cos(self.patch_angles[k]*2*pi/360)*d

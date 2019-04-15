@@ -8,9 +8,7 @@ Created on 16 May 2018
 @author: Eugen Rožić
 '''
 
-from lammps_multistate_rods import Simulation
-
-def get_cluster_data(raw_data, every, model, type_offset, compute_ID=None):
+def get_cluster_data(raw_data, every, model, type_offset, compute_ID):
     '''
     Extracts cluster data from the raw dump file data (expected to be sorted by particle ID).
     
@@ -22,7 +20,7 @@ def get_cluster_data(raw_data, every, model, type_offset, compute_ID=None):
     
     type_offset : the type offset for the rod model in the simulation that generated the dump file
     
-    compute_ID: the ID of the LAMMPS cluster compute (default is "Simulation.cluster_compute")
+    compute_ID: the ID of the LAMMPS cluster compute
     
     returns : a triplet of a list of timesteps, a list of box dimensions and a corresponding list of
     snapshot_data, where "snapshot_data" is a dictionary by cluster ID's whose values are lists of
@@ -44,9 +42,6 @@ def get_cluster_data(raw_data, every, model, type_offset, compute_ID=None):
             if state_types == states_types[i]:
                 return i
         return None
-    
-    if compute_ID == None:
-        compute_ID = Simulation.cluster_compute
     
     count = 0
     box_sizes = []

@@ -14,7 +14,7 @@ from lammps import PyLammps
 from ctypes import c_int, c_double
 
 from rod import Rod
-from model import vx
+from rod_model import vx
 
 class Simulation(object):
     '''
@@ -28,6 +28,7 @@ class Simulation(object):
     rods_group = "rods" # name of the LAMMPS group which holds all particles of all the rods
     active_beads_group = "active_rod_beads" # name of the LAMMPS group which holds the active beads of all rods
     cluster_compute = "rod_cluster" # name of the LAMMPS compute that gives cluster labels to active beads
+    rod_dyn_fix = "rod_dynamics"
     
     def __init__(self, py_lmp, model, seed, output_dir, clusters=3.0):
         '''
@@ -174,8 +175,8 @@ class Simulation(object):
             if espa < 6:
                 create_box_args[espa_index+1] = '6'
         
-        self.py_lmp.create_box(type_offset + self.model.max_bead_type, region_ID, "bond/types",
-                               1 + bond_offset, ' '.join(create_box_args))
+        self.py_lmp.create_box(type_offset + max(self.model.all_bead_types), region_ID,
+                               "bond/types", 1 + bond_offset, ' '.join(create_box_args))
         
         # load molecules from model files
         for state_name in self.model.rod_states:
@@ -184,13 +185,13 @@ class Simulation(object):
                                  "toff", type_offset, "boff", bond_offset)
             
         rod_type_range = "{:d}*{:d}".format(type_offset + 1,
-                                            type_offset + self.model.max_bead_type)
+                                            type_offset + max(self.model.all_bead_types))
         
         # set masses (interaction sites are massless, only body beads contribute to mass)
         self.py_lmp.mass(rod_type_range, self.model.rod_mass*10**-10)
         for bead_type in self.model.body_bead_types:
             self.py_lmp.mass(bead_type + type_offset,
-                             self.model.rod_mass/self.model.body_beads)
+                             self.model.rod_mass/self.model.num_beads[0])
             
         # set interactions (initially to 0.0, of whatever interaction, between all pairs of types)
         self._set_pair_coeff(rod_type_range, rod_type_range, (0.0, vx), self.model.global_cutoff)
@@ -270,8 +271,7 @@ class Simulation(object):
         self.py_lmp.group("temp_new_rods", "id >", id_offset)
         self.py_lmp.group(Simulation.rods_group, "union", Simulation.rods_group, "temp_new_rods")
         self.py_lmp.group("temp_new_rods", "clear")
-        if self.clusters > 0.0:
-            self.py_lmp.group(Simulation.active_beads_group, "type", self._active_bead_types) # contains all active beads of all rods
+        self._reset_active_beads_group()
         
         # create rods (in Python) + supporting stuff
         rods_before = self._nrods
@@ -294,22 +294,22 @@ class Simulation(object):
         keyword_options = []
         for key, value in kwargs.iteritems():
             keyword_options.append(str(key))
-            try:
+            if type(value) in (list, tuple):
                 keyword_options.extend(map(str, value))
-            except TypeError:
+            else:
                 keyword_options.append(str(value))
         keyword_options = ' '.join(keyword_options)
         
         ensemble = ensemble.strip().lower()
         fix_name = "rigid/"+ensemble+"/small" if ensemble != "" else "rigid/small"
     
-        self.py_lmp.fix("rod_dynamics", Simulation.rods_group, fix_name,
+        self.py_lmp.fix(Simulation.rod_dyn_fix, Simulation.rods_group, fix_name,
                         "molecule", keyword_options) 
         self.py_lmp.neigh_modify("exclude", "molecule/intra", Simulation.rods_group)
     
 #        if (gcmc != None):
 #        py_lmp.fix("rod_supply", base_group, "gcmc", gcmc[0], gcmc[1], 0, 0, seed, temp, gcmc[2], 0.0,
-#                    "mol", rod_states[0], "rigid rod_dynamics", "region", gcmc[3], "group", master_group_name)
+#                    "mol", rod_states[0], "rigid", rod_dyn_fix, "region", gcmc[3], "group", master_group_name)
 #        
 #        py_lmp.compute_modify("thermo_temp", "dynamic/dof yes")
 #        py_lmp.fix_modify("rod_dynamics", "dynamic/dof yes") #only necessary for rigid/nvt

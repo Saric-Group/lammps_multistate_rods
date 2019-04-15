@@ -9,22 +9,6 @@ Created on 11 Jan 2019
 '''
 
 import re
-from lammps_multistate_rods import Simulation
-
-def keyword_parse_pattern(lammps_keyword):
-    '''
-    Returns a regular expression string for the given LAMMPS dump keyword.
-    
-    Currently supported: id, type, mol, c_rod_cluster, x, y, z
-    '''
-    if lammps_keyword in ('id','type','mol','c_'+Simulation.cluster_compute):
-        return r'(\d+)'
-    elif lammps_keyword in ('x','y','z'):
-        return r'([-\+\d\.eE]+)'
-    else:
-        print 'WARNING: Unsupported lammps_keyword ({}) in dump file!'.format(
-            lammps_keyword)
-        return r'(\S+)' #one or more non-whitespace characters
     
 def parse_dump_file(dump_file_path):
     '''
@@ -62,7 +46,7 @@ def parse_dump_file(dump_file_path):
                 new_data_struct = line.split()[2:]
                 if data_structure == None:
                     data_structure = new_data_struct
-                    data_pattern = re.compile(' '.join(map(keyword_parse_pattern, data_structure)))
+                    data_pattern = re.compile(' '.join([r'(\S+)' for _ in data_structure]))
                 elif new_data_struct != data_structure:
                     raise Exception('ERROR (timestep {:d}): '\
                                     'Output has to be uniform throughout a dump file!'.format(timestep))

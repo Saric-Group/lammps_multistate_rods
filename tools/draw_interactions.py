@@ -10,7 +10,7 @@ Created on 30 Nov 2018
 
 import numpy as np
 
-from lammps_multistate_rods import Model
+from lammps_multistate_rods import Rod_model
 import lammps_multistate_rods.tools.interactions as md
 
 import matplotlib.pyplot as plt
@@ -376,7 +376,7 @@ if __name__ != '__main__':
     quit()
 
 cfg_filename = args.config_file
-model = Model(cfg_filename)
+model = Rod_model(cfg_filename)
 md.setup(model)
 
 # plot parameters and grid points

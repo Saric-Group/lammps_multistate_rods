@@ -26,11 +26,9 @@ class Simulation(object):
     '''
     
     rods_group = "rods" # name of the LAMMPS group which holds all particles of all the rods
-    active_beads_group = "active_rod_beads" # name of the LAMMPS group which holds the active beads of all rods
-    cluster_compute = "rod_cluster" # name of the LAMMPS compute that gives cluster labels to active beads
     rod_dyn_fix = "rod_dynamics"
     
-    def __init__(self, py_lmp, model, seed, output_dir, clusters=3.0):
+    def __init__(self, py_lmp, model, seed, output_dir):
         '''
         Generates the model files and initiates the LAMMPS log.
         
@@ -41,12 +39,6 @@ class Simulation(object):
         seed : a seed to be used for all random number generators
         
         output_dir : where all files that are created (.mol, LAMMPS log, dumps etc.) will be put
-        
-        clusters = <number> : the distance between bead centers that qualifies two beads (and
-        consequently whole rods) to be in the same cluster. If it is > 0.0 a LAMMPS group will
-        be defined that will contain all active beads (those that have non-vx interactions; this
-        slows down the simulation) and a compute that gives all active beads a cluster label will
-        be made available to the user through the "cluster_compute" class variable. 
         '''       
         if not isinstance(py_lmp, PyLammps):
             raise Exception("py_lmp has to be an instance of lammps.PyLammps!")
@@ -58,9 +50,7 @@ class Simulation(object):
             
         # simulation properties (most of which to be set in "setup" and "create_rods")
         self.seed = seed
-        self.clusters = clusters
         self.type_offset = None
-        self._active_bead_types = None
         self._state_types = None
         self.bond_offset = None
         self.pair_styles = None
@@ -126,8 +116,6 @@ class Simulation(object):
         '''
         # set instance variables
         self.type_offset = type_offset
-        self._active_bead_types = ' '.join(str(t + type_offset)
-                                           for t in self.model.active_bead_types)
         self._state_types = [ (self.model.total_beads*c_int)(
             *[ elem + type_offset for patch in state_struct for elem in patch])
             for state_struct in self.model.state_structures]
@@ -211,12 +199,7 @@ class Simulation(object):
         
         self.py_lmp.bond_coeff(bond_offset + 1, 'zero')
         
-        #create groups & set cluster tracking
         self.py_lmp.group(Simulation.rods_group, "empty")
-        if self.clusters > 0.0:
-            self.py_lmp.group(Simulation.active_beads_group, "empty")
-            self.py_lmp.compute(Simulation.cluster_compute, Simulation.active_beads_group,
-                                "aggregate/atom", self.clusters*self.model.rod_radius)
 
     def create_rods(self, state_ID=0, **kwargs):
         '''
@@ -271,7 +254,6 @@ class Simulation(object):
         self.py_lmp.group("temp_new_rods", "id >", id_offset)
         self.py_lmp.group(Simulation.rods_group, "union", Simulation.rods_group, "temp_new_rods")
         self.py_lmp.group("temp_new_rods", "clear")
-        self._reset_active_beads_group()
         
         # create rods (in Python) + supporting stuff
         rods_before = self._nrods
@@ -372,17 +354,20 @@ the (much) less efficient "run 0 post no"...'
             rod.set_state(old_state) # revert change back
             return (0, U_before)
 
-    def state_change_MC(self, ntries, optimise=None):
+    def state_change_MC(self, ntries, optimise=None, replenish_region=None):
         '''
         Tries to make "ntries" Monte Carlo state changes on randomly selected rods that are
         presumed to be equilibrated to the simulation temperature.
         
-        optimise: if None (default) optimisation is used (no neighbour list
+        optimise : if None (default) optimisation is used (no neighbour list
         rebuild) only if the model uses a single LAMMPS pair style, otherwise this
         optimisation can be forced (True) or ignored (False).
         NOTE: using optimisation while corresponding beads in different states have
         a different style of pair interaction MAY, and most probably WILL, lead to
-        wrong energy calculations!  
+        wrong energy calculations!
+        
+        replenish_region : creates new rods (randomly in the region with the given ID) for
+        each that changed state FROM the basic state (ID 0) into another state
         
         returns : the number of accepted moves
         '''
@@ -401,22 +386,20 @@ the (much) less efficient "run 0 post no"...'
         U_start = U_current = self.py_lmp.lmp.extract_compute("thermo_pe", 0, 0)
         T_current = self.py_lmp.lmp.extract_compute("thermo_temp", 0, 0)
         success = 0
+        sol_to_beta = 0
         for _ in range(ntries):
-            (acpt, U_current) = self._try_state_change(self.get_random_rod(),
-                                                       U_current, T_current, neigh_flag)
+            rand_rod = self.get_random_rod()
+            init_state = rand_rod.state
+            (acpt, U_current) = self._try_state_change(rand_rod, U_current, T_current,
+                                                       neigh_flag)
             success += acpt
+            if init_state == 0:
+                sol_to_beta += acpt
         
-        if success > 0:
-            self._reset_active_beads_group()
+        if replenish_region and sol_to_beta > 0:
+            #FIXME TODO this will probably cause overlap errors...
+            self.create_rods(random = (sol_to_beta, self.seed, replenish_region))
     
         self.py_lmp.command('print "state_change_MC: {:d}/{:d} (delta_U = {:f})"'.format(
                             success, ntries, U_start - U_current))
         return success
-    
-    def _reset_active_beads_group(self):
-        '''
-        Resets the group by first clearing it and then reassigning to it.
-        '''
-        if self.clusters > 0.0:
-            self.py_lmp.group(Simulation.active_beads_group, "clear")
-            self.py_lmp.group(Simulation.active_beads_group, "type", self._active_bead_types)

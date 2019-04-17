@@ -51,13 +51,13 @@ def setup(rod_model):
     
     global K, M, r_rod_sq
     K = 1 + model.num_patches #body bead as a 0th patch
-    M = [model.body_beads] + model.patch_beads
+    M = model.num_beads
     r_rod_sq = model.rod_radius**2
     
     global bead_z, patch_r, patch_phi
-    bead_z = [None]*(model.num_patches + 1)
-    patch_r = [0.0]*(model.num_patches + 1)
-    patch_phi = [None]*(model.num_patches + 1) #so error is thrown if patch_phi[0] is used for calculation...
+    bead_z = [None]*K
+    patch_r = [0.0]*K
+    patch_phi = [None]*K #so error is thrown if patch_phi[0] is used for calculation...
     
     bead_z[0] = [(i - (M[0]-1)/2.)*(2*model.rod_radius - model.body_bead_overlap)
                  for i in range(M[0])]

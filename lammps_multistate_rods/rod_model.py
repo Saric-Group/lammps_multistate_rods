@@ -33,6 +33,23 @@ class Rod_model(object):
     '''
 
     def __init__(self, config_file_path):
+        '''
+        Parses the config file and sets the parameters given within, and those derived
+        from them, as object attributes.
+        
+        The derived variables/attributes are:
+         - num_patches: the number of patches (NOT including the body)
+         - num_beads: the number of beads in each patch (including the body)
+         - total_beads: the total number of beads in a rod
+         - state_bead_types: the set of types of beads by state
+         - body_bead_types: the set of types of body beads (in all states)
+         - patch_bead_types: the set of types of beads by patch (NOT including the body)
+         - active_bead_types: the set of types of beads that have a non-vx interaction
+         - all_bead_types: the set of all types of beads used in the .cfg file
+         - body_bead_overlap: self-explanatory; calculated from rod_length
+         - bead_radii: a dictionary of bead radii by bead type
+         - transitions: a list by state_ID of lists of (state_ID, penalty) pairs for all allowed transitions
+        '''
         cfg_params = Params() #for controlled and correct eval & exec
         # ROD PROPERTIES (available to set in the config file)
         cfg_params.rod_radius = 1.0 #default
@@ -113,6 +130,7 @@ class Rod_model(object):
         self.body_bead_overlap = None #dependent on "state_structures" &  "rod_length"
         self.patch_angles = cfg_params.patch_angles
         self.patch_bead_radii = cfg_params.patch_bead_radii
+        self.bead_radii = None #dependent on "state_structures"
         self.patch_bead_sep = cfg_params.patch_bead_sep
         self.patch_bulge_out = cfg_params.patch_bulge_out
         self.int_types = cfg_params.int_types
@@ -120,7 +138,6 @@ class Rod_model(object):
         self.eps = cfg_params.eps
         self.trans_penalty = cfg_params.trans_penalty
         self.transitions = None #dependent on "trans_penalty";
-            # a list by state_ID of lists of (state_ID, penalty) pairs for all allowed transitions
         
         self._set_dependent_params()
     
@@ -133,6 +150,7 @@ class Rod_model(object):
             - the "transitions" list from the "trans_penalty" dictionary
         '''
         self.state_bead_types = [None]*self.num_states
+        self.bead_radii = {}
         for n in range(self.num_states):
             state_struct = self.state_structures[n]
             #check all have the same "form"            
@@ -140,16 +158,28 @@ class Rod_model(object):
                 self.num_beads = map(len, state_struct)
                 self.num_patches = len(self.num_beads) - 1
             elif map(len, state_struct) != self.num_beads:
-                raise Exception('All states must have the same number of beads in each patch!')
+                raise Exception('All states must have the same number of patches and beads in each patch!')
             
             if self.patch_bead_types == None:
                 self.body_bead_types = set()
                 self.patch_bead_types = [set() for _ in range(self.num_patches)]
             self.body_bead_types.update(state_struct[0])
             self.state_bead_types[n] = set(state_struct[0])
+            for body_bead in state_struct[0]:
+                temp = self.bead_radii.get(body_bead)
+                if temp is None:
+                    self.bead_radii[body_bead] = self.rod_radius
+                elif temp != self.rod_radius:
+                    raise Exception('Beads of the same type have to have the same radius!')
             for i in range(self.num_patches):
                 self.patch_bead_types[i].update(state_struct[i+1])
                 self.state_bead_types[n].update(state_struct[i+1])
+                for patch_bead in state_struct[i+1]:
+                    temp = self.bead_radii.get(patch_bead)
+                    if temp is None:
+                        self.bead_radii[patch_bead] = self.patch_bead_radii[i]
+                    elif temp != self.patch_bead_radii[i]:
+                        raise Exception('Beads of the same type have to have the same radius!') 
         
         self.total_beads = sum(self.num_beads)
         self.body_bead_overlap = ((2*self.rod_radius*self.num_beads[0] - self.rod_length) /

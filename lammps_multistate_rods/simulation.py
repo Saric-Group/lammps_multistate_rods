@@ -57,6 +57,8 @@ class Simulation(object):
         self._rods = []
         self._nrods = 0
         self._rod_counters = [0]*model.num_states
+        
+        self.to_replenish = 0 #TODO ?!?!
     
     def _set_pair_coeff(self, type_1, type_2, (eps, int_type_key), sigma):
         
@@ -183,18 +185,10 @@ class Simulation(object):
             
         # set interactions (initially to 0.0, of whatever interaction, between all pairs of types)
         self._set_pair_coeff(rod_type_range, rod_type_range, (0.0, vx), self.model.global_cutoff)
-        for bead_types, eps_val in self.model.eps.iteritems():
-            sigma = 0
-            for bead_type in bead_types:
-                if bead_type in self.model.body_bead_types:
-                    sigma += self.model.rod_radius
-                else:
-                    for k in range(self.model.num_patches):
-                        if bead_type in self.model.patch_bead_types[k]:
-                            sigma += self.model.patch_bead_radii[k]
-                            break
-            type_1 = bead_types[0] + type_offset
-            type_2 = bead_types[1] + type_offset
+        for (type_1, type_2), eps_val in self.model.eps.iteritems():
+            sigma = self.model.bead_radii[type_1] + self.model.bead_radii[type_2]
+            type_1 += type_offset
+            type_2 += type_offset
             self._set_pair_coeff(type_1, type_2, eps_val, sigma)
         
         self.py_lmp.bond_coeff(bond_offset + 1, 'zero')
@@ -354,7 +348,7 @@ the (much) less efficient "run 0 post no"...'
             rod.set_state(old_state) # revert change back
             return (0, U_before)
 
-    def state_change_MC(self, ntries, optimise=None, replenish_region=None):
+    def state_change_MC(self, ntries, optimise=None, replenish=None):
         '''
         Tries to make "ntries" Monte Carlo state changes on randomly selected rods that are
         presumed to be equilibrated to the simulation temperature.
@@ -366,8 +360,7 @@ the (much) less efficient "run 0 post no"...'
         a different style of pair interaction MAY, and most probably WILL, lead to
         wrong energy calculations!
         
-        replenish_region : creates new rods (randomly in the region with the given ID) for
-        each that changed state FROM the basic state (ID 0) into another state
+        replenish : TODO
         
         returns : the number of accepted moves
         '''
@@ -386,7 +379,6 @@ the (much) less efficient "run 0 post no"...'
         U_start = U_current = self.py_lmp.lmp.extract_compute("thermo_pe", 0, 0)
         T_current = self.py_lmp.lmp.extract_compute("thermo_temp", 0, 0)
         success = 0
-        sol_to_beta = 0
         for _ in range(ntries):
             rand_rod = self.get_random_rod()
             init_state = rand_rod.state
@@ -394,11 +386,14 @@ the (much) less efficient "run 0 post no"...'
                                                        neigh_flag)
             success += acpt
             if init_state == 0:
-                sol_to_beta += acpt
+                self.to_replenish += acpt #if changed from base state
+            elif rand_rod.state == 0:
+                self.to_replenish -= acpt #if changed to base state
         
-        if replenish_region and sol_to_beta > 0:
-            #FIXME TODO this will probably cause overlap errors...
-            self.create_rods(random = (sol_to_beta, self.seed, replenish_region))
+        if replenish and self.to_replenish > 0:
+            self.create_rods(random = (self.to_replenish, self.seed, replenish[0]), 
+                             exclude = replenish[1], maxtries = replenish[2])
+            self.to_replenish = 0
     
         self.py_lmp.command('print "state_change_MC: {:d}/{:d} (delta_U = {:f})"'.format(
                             success, ntries, U_start - U_current))

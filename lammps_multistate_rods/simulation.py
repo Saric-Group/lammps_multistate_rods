@@ -8,7 +8,7 @@ Created on 22 Mar 2018
 '''
 import os
 from math import exp, sqrt, pi
-import random
+from random import Random
 
 from lammps import PyLammps
 from ctypes import c_int, c_double
@@ -43,6 +43,7 @@ class Simulation(object):
         if not isinstance(py_lmp, PyLammps):
             raise Exception("py_lmp has to be an instance of lammps.PyLammps!")
         self.py_lmp = py_lmp
+        self.random = Random(seed)
         
         self.model = model
         self.output_dir = output_dir
@@ -309,7 +310,7 @@ class Simulation(object):
         '''
         returns : a randomly picked rod as a lammps_multistate_rods.rod.Rod object
         '''
-        return self._rods[random.randrange(self._nrods)]
+        return self._rods[self.random.randrange(self._nrods)]
 
     def _try_state_change(self, rod, U_before, T, neigh_flag):
         '''
@@ -325,7 +326,7 @@ class Simulation(object):
         '''
         old_state = rod.state
         candidate_states = self.model.transitions[old_state]
-        new_state, penalty = candidate_states[random.randrange(0, len(candidate_states))] # certainty a try will be made
+        new_state, penalty = candidate_states[self.random.randrange(0, len(candidate_states))] # certainty a try will be made
         rod.set_state(new_state)
         
         try:
@@ -340,7 +341,7 @@ the (much) less efficient "run 0 post no"...'
         
         accept_prob = exp((U_before - U_after - penalty) / T)
         
-        if (accept_prob > 1 or random.random() < accept_prob):
+        if (accept_prob > 1 or self.random.random() < accept_prob):
             self._rod_counters[old_state] -= 1
             self._rod_counters[new_state] += 1
             return (1, U_after)

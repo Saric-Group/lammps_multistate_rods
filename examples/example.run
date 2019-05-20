@@ -1,0 +1,13 @@
+# This an example of a run configuration file.
+# Syntactically, the contents can be any valid python code.
+
+cell_size = 12.0
+num_cells = 6.0
+
+temp = 1.0
+damp = 0.1
+
+dt = 0.01
+run_length = 100
+
+mc_moves = 1.0

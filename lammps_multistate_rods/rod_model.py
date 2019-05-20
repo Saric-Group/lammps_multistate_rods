@@ -52,35 +52,20 @@ class Rod_model(object):
         '''
         cfg_params = Params() #for controlled and correct eval & exec
         # ROD PROPERTIES (available to set in the config file)
-        cfg_params.rod_radius = 1.0 #default
+        cfg_params.rod_radius = 1.0
         cfg_params.rod_length = None #default is 8*rod_radius (after rod_radius is (re)defined)
-        cfg_params.rod_mass = 1.0 #default
-        cfg_params.rod_states = None #example: ('soluble_state', 'beta_state')
+        cfg_params.rod_mass = 1.0
+        cfg_params.rod_states = None
         cfg_params.num_states = None #dependent on "rod_states"
-        cfg_params.state_structures = None #dependent on "rod_states"
-            #example of elements:
-            # state_structures[0] = '1-1-1-1-1-1-2|3-3-3-3' # '1' is inert body type, '3' is inert side-patch type
-            # state_structures[1] = '1-1-1-1-1-1-1|4-4-4-4' # '2' is active body type, '4' is active side-patch type
-        cfg_params.patch_angles = []
-        cfg_params.patch_bead_radii = []
-        cfg_params.patch_bead_sep = []
-        cfg_params.patch_bulge_out = 0.0 #default
+        cfg_params.state_structures = None
+        cfg_params.patch_angles = [] #default for 0 patches
+        cfg_params.patch_bead_radii = [] #default for 0 patches
+        cfg_params.patch_bead_sep = [] #default for 0 patches
+        cfg_params.patch_bulge_out = 0.0 #default (for all patches)
         # INTERACTION PROPERTIES (available to set in the config file)
-        cfg_params.int_types = None # interaction types (with parameters)
-            #example:
-            # int_types = {'patch':('cosine/squared', 1.75*rod_radius),
-            #              'tip':('cosine/squared', 1.0*rod_radius, 'wca'),
-            #              'vx':('lj/cut', 0.0)}
-        cfg_params.eps = {} # interaction strengths between bead types
-            #example of elements:
-            # eps[(1,1)] = eps[(1,2)] = eps[(1,3)] = eps[(1,4)] = (5.0, 'vx')
-            # eps[(2,3)] = eps[(3,3)] = eps[(3,4)] = (5.0, 'vx')
-            # eps[(2,2)] = (3.25, 'tip') # soluble-soluble tip interaction
-            # eps[(2,4)] = (6.5, 'patch') # soluble-beta interaction
-            # eps[(4,4)] = (30.0, 'patch') # beta-beta interaction
-        cfg_params.trans_penalty = {} # transition penalties between states
-            #example of elements:
-            # trans_penalty[(0,1)] = 15.0 # soluble-beta transition
+        cfg_params.int_types = None
+        cfg_params.eps = {}
+        cfg_params.trans_penalty = {}
         
         with open(config_file_path,'r') as config_file:
             command = ''

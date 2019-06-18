@@ -92,7 +92,7 @@ py_lmp.region("box", "block", -run_args.num_cells / 2, run_args.num_cells / 2,
                               -run_args.num_cells / 2, run_args.num_cells / 2,
                               -run_args.num_cells / 2, run_args.num_cells / 2)
 simulation.setup("box")
-simulation.create_rods(box = None)
+simulation.create_rods()
 
 # DYNAMICS
 py_lmp.fix("thermostat", "all", "langevin",

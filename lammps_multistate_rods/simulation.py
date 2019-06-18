@@ -68,6 +68,8 @@ class Simulation(object):
         self._rods = []
         self._nrods = 0
         self._rod_counters = [0]*model.num_states
+        
+        self.to_replenish = 0 #TODO ?!?!
     
     def _set_pair_coeff(self, type_1, type_2, (eps, int_type_key), sigma):
         
@@ -213,10 +215,10 @@ class Simulation(object):
         The method supports specifying different ways of creating the rods by passing
         one of the following optional parameters:
         
-            box = None (DEFAULT) - creates them on a defined lattice
-            region = <region_ID> - creates them on a defined lattice only in the specified region
-            random = (N, seed, <region_ID>) - creates them on random locations in the specified region
-            file = <file_path> - creates them on locations and with rotations specified in the file;
+            box = (...) (DEFAULT) - creates them on a defined lattice
+            region = (<region_ID>, ...) - creates them on a defined lattice only in the specified region
+            random = (N, seed, <region_ID>, ...) - creates them on random locations in the specified region
+            file = (<file_path>, ...) - creates them on locations and with rotations specified in the file;
             the file has to have the following format:
                 monomers: N
                 <empty line>
@@ -224,6 +226,9 @@ class Simulation(object):
                 ...(N-1 more lines like above)...
             where the <angle> should be in radians, and the Rs are components of a unit vector about
             which to rotate, and whose origin is at the insertion point.
+        
+        The "..." stands for extra parameters that will be passed to "create_atoms" verbatim as a single
+        space-separated string.
         '''
         all_atom_ids = self.py_lmp.lmp.gather_atoms_concat("id", 0, 1)
         if len(all_atom_ids) > 0:
@@ -231,18 +236,26 @@ class Simulation(object):
         else:
             id_offset = 0
         
-        #TODO process additional arguments (like maxtries and exclude...)
-        if "region" in kwargs.keys():
-            region_ID = kwargs['region']
-            self.py_lmp.create_atoms(0, "region", region_ID,
-                                     "mol", self.model.rod_states[state_ID], self.seed)
+        if "box" in kwargs.keys():
+            params = kwargs['box']
+            if not params:
+                params = []
+            self.py_lmp.create_atoms(0, "box",
+                                     "mol", self.model.rod_states[state_ID], self.seed,
+                                     ' '.join(map(str, params)))
+        elif "region" in kwargs.keys():
+            params = kwargs['region']
+            self.py_lmp.create_atoms(0, "region", params[0],
+                                     "mol", self.model.rod_states[state_ID], self.seed,
+                                     ' '.join(map(str, params[1:])))
         elif "random" in kwargs.keys():
-            vals = kwargs['random']
-            self.py_lmp.create_atoms(0, "random", vals[0], vals[1], vals[2],
-                                     "mol", self.model.rod_states[state_ID], self.seed)
+            params = kwargs['random']
+            self.py_lmp.create_atoms(0, "random", params[0], params[1], params[2],
+                                     "mol", self.model.rod_states[state_ID], self.seed,
+                                     ' '.join(map(str, params[3:])))
         elif "file" in kwargs.keys():
-            filename = kwargs['file']
-            with open(filename, 'r') as rods_file:
+            params = kwargs['file']
+            with open(params[0], 'r') as rods_file:
                 N = int(rods_file.readline().split()[1])
                 rods_file.readline()
                 for i in range(N):
@@ -250,10 +263,12 @@ class Simulation(object):
                     self.py_lmp.create_atoms(0, "single", vals[0], vals[1], vals[2],
                                              "mol", self.model.rod_states[state_ID], self.seed,
                                              "rotate", vals[3], vals[4], vals[5], vals[6],
-                                             "units box")
-        else:
+                                             "units box", ' '.join(map(str, params[1:])))
+        elif len(kwargs) == 0: #default
             self.py_lmp.create_atoms(0, "box",
                                      "mol", self.model.rod_states[state_ID], self.seed)
+        else:
+            raise Exception('Unknown options ({:s}) passed to "create_rods"!'.format(kwargs))
         
         # create & populate LAMMPS groups (and setup cluster tracking)
         self.py_lmp.group("temp_new_rods", "id >", id_offset)
@@ -344,7 +359,7 @@ class Simulation(object):
             rod.set_state(old_state) # revert change back
             return (0, U_before)
 
-    def state_change_MC(self, ntries, optimise=None):
+    def state_change_MC(self, ntries, optimise=None, replenish=None):
         '''
         Tries to make "ntries" Monte Carlo state changes on randomly selected rods that are
         presumed to be equilibrated to the simulation temperature.
@@ -355,6 +370,8 @@ class Simulation(object):
         NOTE: using optimisation while corresponding beads in different states have
         a different style of pair interaction MAY, and most probably WILL, lead to
         wrong energy calculations!
+        
+        replenish : TODO... A triplet of (region_ID, exclude, maxtries)
         
         returns : the number of accepted moves
         '''
@@ -375,9 +392,19 @@ class Simulation(object):
         success = 0
         for _ in range(ntries):
             rand_rod = self.get_random_rod()
+            init_state = rand_rod.state
             (acpt, U_current) = self._try_state_change(rand_rod, U_current, T_current,
                                                        neigh_flag)
             success += acpt
+            if init_state == 0:
+                self.to_replenish += acpt #if changed from base state
+            elif rand_rod.state == 0:
+                self.to_replenish -= acpt #if changed to base state
+                
+        if replenish and self.to_replenish > 0:
+            self.create_rods(random = (self.to_replenish, self.seed, replenish[0],
+                                       "exclude", replenish[1], "maxtries", replenish[2]))
+            self.to_replenish = 0
     
         self.py_lmp.command('print "state_change_MC: {:d}/{:d} (delta_U = {:f})"'.format(
                             success, ntries, U_start - U_current))

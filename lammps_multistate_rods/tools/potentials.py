@@ -45,8 +45,8 @@ def cos_sq(r, sigma, cutoff, eps, wca = False):
     
     If wca == True then returns infinity for r < sigma (volume exclusion). 
     '''
-    if cutoff <= sigma:
-        raise Exception("cos_sq has to have cutoff > sigma!")
+    if cutoff < sigma:
+        raise Exception("cos_sq has to have cutoff >= sigma!")
     if r >= cutoff:
         return 0.0
     elif r < sigma:

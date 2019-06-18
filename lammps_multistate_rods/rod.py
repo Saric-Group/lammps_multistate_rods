@@ -1,6 +1,6 @@
 # encoding: utf-8
 '''
-This module holds just that same-name class, refer to its description.
+This module holds just the same-name class, refer to its description.
 
 Created on 17 Jul 2018
 
@@ -16,6 +16,12 @@ class Rod(object):
     '''
     
     def __init__(self, simulation, rod_id, bead_ids, state = None):
+        '''
+        simulation : reference to a Simulation object
+        rod_id : the molecule ID of the rod
+        bead_ids : the LAMMPS IDs of the particles comprising this rod
+        state : the state of this rod; if None will be inferred from the types of the particles
+        '''
         self._sim = simulation
         self._model = simulation.model
         self.id = rod_id

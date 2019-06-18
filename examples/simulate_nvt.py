@@ -14,8 +14,8 @@ import os
 import argparse
 
 parser = argparse.ArgumentParser(description='Program for NVE+Langevin hybrid LAMMPS simulation'\
-                                 'of spherocylinder-like rods, using the "lammps_multistate_rods"'\
-                                 'library.',
+                                 ' of spherocylinder-like rods, using the "lammps_multistate_rods"'\
+                                 ' library.',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 parser.add_argument('cfg_file',
@@ -31,8 +31,8 @@ parser.add_argument('--out', type=str, default=None,
                     help='name/path for the output folder (defaults to cfg_file path w/o ext)')
 
 parser.add_argument('-o', '--output_freq', type=int,
-                    help='configuration output frequency (in MD steps);\
-default behavior is after every batch of MC moves')
+                    help='configuration output frequency (in MD steps);'\
+                    ' default behavior is after every batch of MC moves')
 parser.add_argument('-s', '--silent', action='store_true',
                     help="doesn't print anything to stdout")
 
@@ -102,22 +102,41 @@ simulation.set_rod_dynamics("nve")
 py_lmp.neigh_modify("every 1 delay 1")
 
 # GROUPS & COMPUTES
-if hasattr(run_args, 'cluster_cutoff') and run_args.cluster_cutoff > 0.0:
-    cluster_group = 'active_rod_beads'
-    py_lmp.variable('active', 'atom', '"' + 
-                    ' || '.join(['(type == {:d})'.format(t)
-                                 for t in model.active_bead_types])
+if hasattr(run_args, 'micelle_cutoff') and run_args.micelle_cutoff > 0.0:
+    micelle_group = 'active_sol_beads'
+    py_lmp.variable('active_sol', 'atom', '"' + 
+                    ' || '.join(['(type == {:d})'.format(t) for t in
+                                    filter(lambda t: t in model.state_bead_types[0],
+                                           model.active_bead_types)])
                     + '"')
-    py_lmp.group(cluster_group, 'dynamic', simulation.rods_group,
-                 'var', 'active', 'every', out_freq)
-    cluster_compute = "rod_cluster"
-    py_lmp.compute(cluster_compute, cluster_group, 'aggregate/atom', run_args.cluster_cutoff)
+    py_lmp.group(micelle_group, 'dynamic', simulation.rods_group,
+                 'var', 'active_sol', 'every', out_freq)
+    micelle_compute = "rod_micelle"
+    py_lmp.compute(micelle_compute, micelle_group, 'aggregate/atom', run_args.micelle_cutoff)
+    
+if hasattr(run_args, 'fibril_cutoff') and run_args.fibril_cutoff > 0.0:
+    fibril_group = 'active_beta_beads'
+    py_lmp.variable('active_beta', 'atom', '"' + 
+                    ' || '.join(['(type == {:d})'.format(t) for t in
+                                    filter(lambda t: t in model.state_bead_types[1],
+                                           model.active_bead_types)])
+                    + '"')
+    py_lmp.group(fibril_group, 'dynamic', simulation.rods_group,
+                 'var', 'active_beta', 'every', out_freq)
+    fibril_compute = "rod_fibril"
+    py_lmp.compute(fibril_compute, fibril_group, 'aggregate/atom', run_args.fibril_cutoff)
 
 # OUTPUT
 py_lmp.thermo_style("custom", "step atoms", "pe temp")
 dump_elems = "id x y z type mol"
-if hasattr(run_args, 'cluster_cutoff') and run_args.cluster_cutoff > 0.0:
-    dump_elems += " c_"+cluster_compute
+try:
+    dump_elems += " c_"+micelle_compute
+except:
+    pass #isn't defined
+try:
+    dump_elems += " c_"+fibril_compute
+except:
+    pass #isn't defined
 py_lmp.dump("dump_cmd", "all", "custom", out_freq, dump_path, dump_elems)
 py_lmp.dump_modify("dump_cmd", "sort id")
 py_lmp.thermo(out_freq)

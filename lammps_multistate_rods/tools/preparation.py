@@ -110,10 +110,3 @@ def single(r0, phi, theta, output_path):
         output_file.write('{:.2f} {:.2f} {:.2f} {:.2f} {:.3f} {:.3f} {:.3f}\n'.format(
             r0[0], r0[1], r0[2], R_tot.angle, *R_tot.get_axis(undefined=[0.0, 0.0, 1.0])))
         output_file.write('\n')
-
-def random(model, N, bounds, output_path):
-    '''
-    Randomly placed and rotated N non-overlapping rods inside given bounds...
-    TODO
-    '''
-    pass #TODO

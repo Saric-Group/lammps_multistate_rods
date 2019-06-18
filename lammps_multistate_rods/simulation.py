@@ -1,6 +1,6 @@
 # encoding: utf-8
 '''
-This module holds just that same-name class, refer to its description.
+This module holds just the same-name class, refer to its description.
 
 Created on 22 Mar 2018
 
@@ -23,6 +23,16 @@ class Simulation(object):
     LAMMPS simulation.
     All changes to the particles created by this library (the rods) should go through methods
     of this class, otherwise inconsistent states will probably be reached.
+    
+    Using the "setup" method sets up the simulation, i.e. calls the "create_box" LAMMPS method.
+    This should be done first.
+    Afterwards the "create_rods" method should be called, multiple times if necessary, to create
+    the initial configuration of the simulation.
+    The "set_rod_dynamics" method sets the dynamics of the rods in LAMMPS, but this can also be
+    done "by hand", outside of the library, without calling this method. It is just a convenience
+    method.
+    All the other methods, including the central one ("state_change_MC") can be called during the
+    simulation as necessary, in between LAMMPS "run" commands.
     '''
     
     rods_group = "rods" # name of the LAMMPS group which holds all particles of all the rods
@@ -32,9 +42,9 @@ class Simulation(object):
         '''
         Generates the model files and initiates the LAMMPS log.
         
-        py_lmp : pointer to a PyLammps object
+        py_lmp : reference to a PyLammps object
         
-        model : pointer to a Model object
+        model : reference to a Model object
         
         seed : a seed to be used for all random number generators
         
@@ -58,8 +68,6 @@ class Simulation(object):
         self._rods = []
         self._nrods = 0
         self._rod_counters = [0]*model.num_states
-        
-        self.to_replenish = 0 #TODO ?!?!
     
     def _set_pair_coeff(self, type_1, type_2, (eps, int_type_key), sigma):
         
@@ -89,7 +97,8 @@ class Simulation(object):
               bond_offset=0, extra_bond_styles=[], everything_else=[]):
         '''
         This method sets-up all the styles (atom, pair, bond), the simulation box and all the
-        data needed to simulate the rods (mass, coeffs, etc.).
+        data needed to simulate the rods (mass, coeffs, etc.). It is essentially a proxy for the
+        "box_create" LAMMPS command.
         
         region_ID : the region ID to use in the "create_box" command
         
@@ -101,7 +110,7 @@ class Simulation(object):
         extra_pair_styles : an iterable consisted of tuples of pair style names and parameters
         needed to define them in LAMMPS, e.g. (("lj/cut", 3.0), ("lj/long/dipole/long",
         "cut long 5.0"), ...)
-        WARNING: if using the styles already defined in the model .cfg file the default
+        WARNING: if a styles already defined in the model .cfg file is given here, the default
         model parameters (e.g. global cutoff) will be disregarded for the ones given here,
         which might cause unexpected behaviour
         NOTE: the styles from the model .cfg file are automatically set with "shift yes"
@@ -115,7 +124,7 @@ class Simulation(object):
         NOTE: style "zero" is already defined by default
         
         everything_else : a list containing additional arguments that will be passed verbatim as a single
-        space-separated string to the LAMMPs "box_create" command (e.g. "angle/types", "extra/???/per/atom" etc.)
+        space-separated string to the LAMMPS "box_create" command (e.g. "angle/types", "extra/???/per/atom" etc.)
         '''
         # set instance variables
         self.type_offset = type_offset
@@ -222,6 +231,7 @@ class Simulation(object):
         else:
             id_offset = 0
         
+        #TODO process additional arguments (like maxtries and exclude...)
         if "region" in kwargs.keys():
             region_ID = kwargs['region']
             self.py_lmp.create_atoms(0, "region", region_ID,
@@ -260,36 +270,21 @@ class Simulation(object):
         self._nrods = len(self._rods) # = rods_before + new_rods
         self._rod_counters[state_ID] += new_rods
     
-    def set_rod_dynamics(self, ensemble = "", **kwargs):
+    def set_rod_dynamics(self, ensemble = "", everything_else=[]):
         '''
         Sets a "rigid/<ensemble>/small" integrator for all the rods (default is just "rigid/small")
         
-        Any additional LAMMPS "keyword" options (e.g. langevin, temp, iso etc.) can be passed as
-        named arguments in the following form:
-            keyword = (value_1, value_2, ...)
+        everything_else : a list containing additional arguments that will be passed verbatim as a single
+        space-separated string to the LAMMPS "fix" command (e.g. langevin, temp, iso, ...)
         '''
-        keyword_options = []
-        for key, value in kwargs.iteritems():
-            keyword_options.append(str(key))
-            if type(value) in (list, tuple):
-                keyword_options.extend(map(str, value))
-            else:
-                keyword_options.append(str(value))
-        keyword_options = ' '.join(keyword_options)
+        fix_opt_args = ' '.join(map(str,everything_else))
         
         ensemble = ensemble.strip().lower()
         fix_name = "rigid/"+ensemble+"/small" if ensemble != "" else "rigid/small"
     
         self.py_lmp.fix(Simulation.rod_dyn_fix, Simulation.rods_group, fix_name,
-                        "molecule", keyword_options) 
+                        "molecule", fix_opt_args) 
         self.py_lmp.neigh_modify("exclude", "molecule/intra", Simulation.rods_group)
-    
-#        if (gcmc != None):
-#        py_lmp.fix("rod_supply", base_group, "gcmc", gcmc[0], gcmc[1], 0, 0, seed, temp, gcmc[2], 0.0,
-#                    "mol", rod_states[0], "rigid", rod_dyn_fix, "region", gcmc[3], "group", master_group_name)
-#        
-#        py_lmp.compute_modify("thermo_temp", "dynamic/dof yes")
-#        py_lmp.fix_modify("rod_dynamics", "dynamic/dof yes") #only necessary for rigid/nvt
 
     #####################################################################################
     ### SIMULATION TOOLS ################################################################
@@ -334,8 +329,8 @@ class Simulation(object):
             U_after = self.py_lmp.lmp.lib.lammps_get_pe(self.py_lmp.lmp.lmp, neigh_flag)
         except:
             # use these if library has no "lammps_get_pe" method
-            print 'WARNING: LAMMPS library has no "lammps_get_pe" method! Using\
-the (much) less efficient "run 0 post no"...'
+            print 'WARNING: LAMMPS library has no "lammps_get_pe" method! Using'\
+                  ' the (much) less efficient "run 0 post no"...'
             self.py_lmp.command('run 0 post no')
             U_after = self.py_lmp.lmp.extract_compute("thermo_pe", 0, 0)
         
@@ -349,7 +344,7 @@ the (much) less efficient "run 0 post no"...'
             rod.set_state(old_state) # revert change back
             return (0, U_before)
 
-    def state_change_MC(self, ntries, optimise=None, replenish=None):
+    def state_change_MC(self, ntries, optimise=None):
         '''
         Tries to make "ntries" Monte Carlo state changes on randomly selected rods that are
         presumed to be equilibrated to the simulation temperature.
@@ -360,8 +355,6 @@ the (much) less efficient "run 0 post no"...'
         NOTE: using optimisation while corresponding beads in different states have
         a different style of pair interaction MAY, and most probably WILL, lead to
         wrong energy calculations!
-        
-        replenish : TODO
         
         returns : the number of accepted moves
         '''
@@ -382,19 +375,9 @@ the (much) less efficient "run 0 post no"...'
         success = 0
         for _ in range(ntries):
             rand_rod = self.get_random_rod()
-            init_state = rand_rod.state
             (acpt, U_current) = self._try_state_change(rand_rod, U_current, T_current,
                                                        neigh_flag)
             success += acpt
-            if init_state == 0:
-                self.to_replenish += acpt #if changed from base state
-            elif rand_rod.state == 0:
-                self.to_replenish -= acpt #if changed to base state
-        
-        if replenish and self.to_replenish > 0:
-            self.create_rods(random = (self.to_replenish, self.seed, replenish[0]), 
-                             exclude = replenish[1], maxtries = replenish[2])
-            self.to_replenish = 0
     
         self.py_lmp.command('print "state_change_MC: {:d}/{:d} (delta_U = {:f})"'.format(
                             success, ntries, U_start - U_current))

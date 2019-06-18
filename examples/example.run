@@ -11,3 +11,5 @@ dt = 0.01
 run_length = 100
 
 mc_moves = 1.0
+micelle_cutoff = 2.6
+fibril_cutoff = 2.25

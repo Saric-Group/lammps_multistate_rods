@@ -1,7 +1,7 @@
 # encoding: utf-8
 '''
 An interactive console application for drawing interactive plots of interactions
-between rods from a lammps_multistate_rods model defined in a config file.
+between rods from a lammps_multistate_rods Rod_model defined in a config file.
 
 Created on 30 Nov 2018
 
@@ -351,9 +351,9 @@ def calculate_rod_rod(rod1_state, rod2_state, theta = 0, phi = 0, psi2 = None):
 
 import argparse
 
-parser = argparse.ArgumentParser(description=
-'''An application for interactive visualisation of interaction potentials for
-rod models of the "lammps_multistate_rods" library''',
+parser = argparse.ArgumentParser(description='An application for interactive visualisation'\
+                                 ' of interaction potentials for rod models of the "lammps_'\
+                                 'multistate_rods" library',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('config_file', type=str,
                     help='path to the "lammps_multistate_rods" model config file')

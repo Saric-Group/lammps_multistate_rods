@@ -1,6 +1,6 @@
 # encoding: utf-8
 '''
-This module holds just that same-name class, refer to its description.
+This module holds the same-name class, refer to its description.
 
 Created on 17 Jul 2018
 
@@ -29,7 +29,7 @@ class Rod_model(object):
     a config file.
     This class is meant to be instantiated and used by instances of the Simulation and Rods
     classes of this library. An instance should be available to the user through an instance
-    of the simulation class.
+    of the Simulation class.
     '''
 
     def __init__(self, config_file_path):
@@ -119,7 +119,7 @@ class Rod_model(object):
         self.patch_bead_sep = cfg_params.patch_bead_sep
         self.patch_bulge_out = cfg_params.patch_bulge_out
         self.int_types = cfg_params.int_types
-        self.global_cutoff = 3*self.rod_radius
+        self.global_cutoff = 3*self.rod_radius #default value
         self.eps = cfg_params.eps
         self.trans_penalty = cfg_params.trans_penalty
         self.transitions = None #dependent on "trans_penalty";
@@ -196,6 +196,7 @@ class Rod_model(object):
                 self.eps[bead_types] = eps_val
             else:
                 self.eps[(bead_types[1], bead_types[0])] = eps_val
+        self.active_bead_types = list(self.active_bead_types)
         
         try:
             self.int_types[vx]

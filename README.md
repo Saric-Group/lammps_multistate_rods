@@ -12,13 +12,7 @@ The library is contained within the **lammps_multistate_rods** directory and is 
 
 It also comes with examples of usage in the **examples** directory which contains examples of model configuration files (.cfg) and a console application that uses the library along with an example run configuration file for that application.
 
-The **tools** directory contains a console application that calculates and makes interactive figures of overall interactions between rods and particles defined in a model configuration file (.cfg), and the **docs** directory contains some documentation on the possibilities the user has in modelling a rod model and using this library (TODO).
-
-## Usage
-
-In order to use the library one must first define the rod model configuration file. This is the input to a new `Rod_model` object which basically parses the config file, infers and/or gives default values to what is not explicitly written and keeps all that data for use by the user and a `Simulation` object. The details on the options and possibilities in defining a model are given in the *Modelling a model* pdf file in the **docs** directory (or will be in due time).
-
-Once a configuration file is constructed a Python program has to be written which will use the LAMMPS Python library interface (e.g. `import lammps`) to start LAMMPS (make an instance) and send commands to it. This is exactly the same as writting a LAMMPS input script and all of LAMMPS stands at the user's disposal. This library can then be imported into this program and an instance of `Rod_model` made from the confguration file. Using this a `Simulation` object can be instantiated and used in conjunction with the standard LAMMPS library to achieve the primary function of this library. How exactly to do this is documented in the Python modules of the library as well as shown in the example application in the **examples** directory.
+The **tools** directory contains a console application that calculates and makes interactive figures of overall interactions between rods and particles defined in a model configuration file (.cfg), and the **docs** directory contains documents describing library features and how to use them (e.g. how to define a model).
 
 ## Installation / setup
 
@@ -35,18 +29,18 @@ The requirements for using the library are:
     ```
     pip install numpy pyquaternion
     ```
-    * scipy and matplotlib are necessary for some tools, but not for the library itself (I think)  
+    * scipy and matplotlib are necessary for some tools, but not for the library itself (I think)
 
-2. LAMMPS built with the rigid, molecule and python modules (I also suggest mc, opt, misc and user-misc, just in case):
+2. LAMMPS built with the rigid, molecule and python modules (I also suggest installing mc, opt, misc and user-misc modules, just in case):
     ```
     cd <LAMMPS_dir>/src
     make no-all # can't harm to clean, purge and package-update beforehand...
-    make yes-rigid yes-molecule yes-python
+    make yes-rigid yes-molecule yes-python # yes-opt yes-misc yes-user-misc yes-mc
     make -j4 serial mode=shlib LMP_INC="-DLAMMPS_EXCEPTIONS"
-    make install-python #this is redundant, but again, can't harm
+    make install-python
     ```
-    * It would be best to use the **develop** branch of my fork of the LAMMPS project:  
+    * It would be best to use the *develop branch* of my fork of the LAMMPS project:
         ```  
         git clone -b develop https://github.com/erozic/lammps.git <LAMMPS_dir>  
-        ```  
-        Currently it contains the `cosine/squared` pair style that is not yet in the standard LAMMPS distribution, along with the `lammps_get_pe` library function (that will never be included in standard LAMMPS) and possibly some other non-essential things. All in all, the library should work with the official LAMMPS (8 Feb 2019 last I checked), but not optimally and with reduced capabilities and I don't guarantee it and I strongly suggest using the develop branch of my LAMMPS fork.  
+        ```
+        Currently it contains the `cosine/squared` pair style that is not yet in the standard LAMMPS distribution, along with the `lammps_get_pe` library function (that will never be included in standard LAMMPS) and possibly some other non-essential things. All in all, the library should work with the official LAMMPS (8 Feb 2019, last I checked), but not optimally and with reduced capabilities and I don't guarantee it and I strongly suggest using the develop branch of my LAMMPS fork.

@@ -71,6 +71,11 @@ class Simulation(object):
         
     def _set_pair_coeff(self, type_1, type_2, eps, int_type_key, sigma):
         
+        if type_1 > type_2:
+            temp = type_1
+            type_1 = type_2
+            type_2 = temp
+        
         int_type_vals = self.model.int_types[int_type_key]
         if self._pair_style_type.startswith('hybrid'):
             int_type = int_type_vals[0]
@@ -119,14 +124,33 @@ class Simulation(object):
         '''
         for (type_1, type_2), (eps, int_type) in self.model.eps.iteritems():
             self.set_pair_coeff(type_1, type_2, eps, int_type)
-            
-    def set_vx_interactions(self):
+    
+    def deactivate_state(self, state_ID, vx_eps=1.0):
         '''
-        This method sets the pair coefficients of all type pairs specified in the config file
-        (in the "eps" dictionary) to the standard volume exclusion interaction.
+        This method effectively turns the rods in this state into passive solid rods, with regard
+        to other rods (the user has to take care of interactions with any other non-rod particles).
+        
+        This is achieved by removing all interactions between active bead types of this rod state
+        and any other active rod beads, with the exception of body bead types whose interaction is
+        set to volume-exclusion with other body bead types (of strength vx_eps) 
+        '''
+        active_filter = lambda t: t in self.model.active_bead_types
+        for t1 in filter(active_filter, self.model.state_bead_types[state_ID]):
+            for t2 in filter(active_filter, self.model.all_bead_types):
+                if t1 in self.model.body_bead_types and t2 in self.model.body_bead_types:
+                    self.set_pair_coeff(t1, t2, vx_eps, vx)
+                elif (t1,t2) in self.model.eps or (t2,t1) in self.model.eps:
+                    self.set_pair_coeff(t1, t2, 0.0, vx)
+    
+    def activate_state(self, state_ID):
+        '''
+        This method sets the interactions of the bead types of the specified state to the ones given in
+        the configuration file (e.g. according to the contents of the "eps" matrix/dictionary).
         '''
         for (type_1, type_2), (eps, int_type) in self.model.eps.iteritems():
-            self.set_pair_coeff(type_1, type_2, eps, vx)
+            if type_1 in self.model.state_bead_types[state_ID] or\
+               type_2 in self.model.state_bead_types[state_ID]:
+                self.set_pair_coeff(type_1, type_2, eps, int_type)
             
     def setup(self, region_ID, atom_style='molecular', type_offset=0,
               extra_pair_styles=[], overlay=False,
@@ -269,10 +293,10 @@ class Simulation(object):
         The method supports specifying different ways of creating the rods by passing
         one of the following optional parameters:
         
-            box = None (DEFAULT) - creates them on a defined lattice
-            region = <region_ID> - creates them on a defined lattice only in the specified region
-            random = (N, seed, <region_ID>) - creates them on random locations in the specified region
-            file = <file_path> - creates them on locations and with rotations specified in the file;
+            box = (...) (DEFAULT) - creates them on a defined lattice
+            region = (<region_ID>, ...) - creates them on a defined lattice only in the specified region
+            random = (N, seed, <region_ID>, ...) - creates them on random locations in the specified region
+            file = (<file_path>, ...) - creates them on locations and with rotations specified in the file;
             the file has to have the following format:
                 monomers: N
                 <empty line>
@@ -280,6 +304,9 @@ class Simulation(object):
                 ...(N-1 more lines like above)...
             where the <angle> should be in radians, and the Rs are components of a unit vector about
             which to rotate, and whose origin is at the insertion point.
+        
+        The "..." stands for extra parameters that will be passed to "create_atoms" verbatim as a single
+        space-separated string.
         '''
         all_atom_ids = self.py_lmp.lmp.gather_atoms_concat("id", 0, 1)
         if len(all_atom_ids) > 0:
@@ -287,18 +314,26 @@ class Simulation(object):
         else:
             id_offset = 0
         
-        #TODO process additional arguments (like maxtries and exclude...)
-        if "region" in kwargs.keys():
-            region_ID = kwargs['region']
-            self.py_lmp.create_atoms(0, "region", region_ID,
-                                     "mol", self.model.rod_states[state_ID], self.seed)
+        if "box" in kwargs.keys():
+            params = kwargs['box']
+            if not params:
+                params = []
+            self.py_lmp.create_atoms(0, "box",
+                                     "mol", self.model.rod_states[state_ID], self.seed,
+                                     ' '.join(map(str, params)))
+        elif "region" in kwargs.keys():
+            params = kwargs['region']
+            self.py_lmp.create_atoms(0, "region", params[0],
+                                     "mol", self.model.rod_states[state_ID], self.seed,
+                                     ' '.join(map(str, params[1:])))
         elif "random" in kwargs.keys():
-            vals = kwargs['random']
-            self.py_lmp.create_atoms(0, "random", vals[0], vals[1], vals[2],
-                                     "mol", self.model.rod_states[state_ID], self.seed)
+            params = kwargs['random']
+            self.py_lmp.create_atoms(0, "random", params[0], params[1], params[2],
+                                     "mol", self.model.rod_states[state_ID], self.seed,
+                                     ' '.join(map(str, params[3:])))
         elif "file" in kwargs.keys():
-            filename = kwargs['file']
-            with open(filename, 'r') as rods_file:
+            params = kwargs['file']
+            with open(params[0], 'r') as rods_file:
                 N = int(rods_file.readline().split()[1])
                 rods_file.readline()
                 for i in range(N):
@@ -306,10 +341,12 @@ class Simulation(object):
                     self.py_lmp.create_atoms(0, "single", vals[0], vals[1], vals[2],
                                              "mol", self.model.rod_states[state_ID], self.seed,
                                              "rotate", vals[3], vals[4], vals[5], vals[6],
-                                             "units box")
-        else:
+                                             "units box", ' '.join(map(str, params[1:])))
+        elif len(kwargs) == 0: #default
             self.py_lmp.create_atoms(0, "box",
                                      "mol", self.model.rod_states[state_ID], self.seed)
+        else:
+            raise Exception('Unknown options ({:s}) passed to "create_rods"!'.format(kwargs))
         
         # create & populate LAMMPS groups (and setup cluster tracking)
         self.py_lmp.group("temp_new_rods", "id >", id_offset)

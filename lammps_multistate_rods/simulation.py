@@ -68,33 +68,70 @@ class Simulation(object):
         self._rods = []
         self._nrods = 0
         self._rod_counters = [0]*model.num_states
-    
-    def _set_pair_coeff(self, type_1, type_2, (eps, int_type_key), sigma):
         
-        int_type = self.model.int_types[int_type_key]
+    def _set_pair_coeff(self, type_1, type_2, eps, int_type_key, sigma):
         
-        if int_type[0] == 'lj/cut':
-            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], eps,
-                                   sigma/pow(2,1./6), sigma+int_type[1])
-        elif int_type[0] == 'cosine/squared':
-            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], eps,
-                                   sigma, sigma+int_type[1],
-                                   int_type[2] if len(int_type)==3 else "")
-        elif int_type[0] == 'nm/cut':
-            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], eps,
-                                   sigma, int_type[1], int_type[2], sigma+int_type[3])
-        elif int_type[0] == 'morse':
-            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], eps,
-                                   int_type[1], sigma, sigma+int_type[2])
-        elif int_type[0] == 'gauss/cut':
-            H = -eps*sqrt(2*pi)*int_type[1]
-            self.py_lmp.pair_coeff(type_1, type_2, int_type[0], H,
-                                   sigma, int_type[1], sigma+int_type[2])
+        int_type_vals = self.model.int_types[int_type_key]
+        if self._pair_style_type.startswith('hybrid'):
+            int_type = int_type_vals[0]
         else:
-            raise Exception('Unknown/invalid int_type parameter: '+ str(int_type))
+            int_type = ''
+        
+        if int_type_vals[0] == 'lj/cut':
+            self.py_lmp.pair_coeff(type_1, type_2, int_type, eps,
+                                   sigma/pow(2,1./6), sigma+int_type_vals[1])
+        elif int_type_vals[0] == 'cosine/squared':
+            self.py_lmp.pair_coeff(type_1, type_2, int_type, eps,
+                                   sigma, sigma+int_type_vals[1],
+                                   int_type_vals[2] if len(int_type_vals)==3 else "")
+        elif int_type_vals[0] == 'nm/cut':
+            self.py_lmp.pair_coeff(type_1, type_2, int_type, eps,
+                                   sigma, int_type_vals[1], int_type_vals[2], sigma+int_type_vals[3])
+        elif int_type_vals[0] == 'morse':
+            self.py_lmp.pair_coeff(type_1, type_2, int_type, eps,
+                                   int_type_vals[1], sigma, sigma+int_type_vals[2])
+        elif int_type_vals[0] == 'gauss/cut':
+            H = -eps*sqrt(2*pi)*int_type_vals[1]
+            self.py_lmp.pair_coeff(type_1, type_2, int_type, H,
+                                   sigma, int_type_vals[1], sigma+int_type_vals[2])
+        else:
+            raise Exception('Unknown/invalid int_type parameter: '+ str(int_type_vals))
+        
+    def set_pair_coeff(self, type_1, type_2, eps, int_type_key):
+        '''
+        This method sets a single pair coefficient between two particle types.
+        
+        type_1, type_2 : rod bead types as given in the config file (not the actual, offseted LAMMPS ones)
+        eps : interaction strength
+        int_type_key : the identificator of the interaction type (key to "int_types" from the config file)
+        '''
+        
+        sigma = self.model.bead_radii[type_1] + self.model.bead_radii[type_2]
+        type_1 += self.type_offset
+        type_2 += self.type_offset
+        
+        self._set_pair_coeff(type_1, type_2, eps, int_type_key, sigma)
+        
+    def set_config_interactions(self):
+        '''
+        This method sets all the pair coefficients as they are given in the config file (in the 
+        "eps" dictionary).
+        '''
+        for (type_1, type_2), (eps, int_type) in self.model.eps.iteritems():
+            self.set_pair_coeff(type_1, type_2, eps, int_type)
             
-    def setup(self, region_ID, atom_style=None, type_offset=0, extra_pair_styles=[], overlay=False,
-              bond_offset=0, extra_bond_styles=[], everything_else=[]):
+    def set_vx_interactions(self):
+        '''
+        This method sets the pair coefficients of all type pairs specified in the config file
+        (in the "eps" dictionary) to the standard volume exclusion interaction.
+        '''
+        for (type_1, type_2), (eps, int_type) in self.model.eps.iteritems():
+            self.set_pair_coeff(type_1, type_2, eps, vx)
+            
+    def setup(self, region_ID, atom_style='molecular', type_offset=0,
+              extra_pair_styles=[], overlay=False,
+              bond_offset=0, extra_bond_styles=[],
+              everything_else=[]):
         '''
         This method sets-up all the styles (atom, pair, bond), the simulation box and all the
         data needed to simulate the rods (mass, coeffs, etc.). It is essentially a proxy for the
@@ -102,8 +139,7 @@ class Simulation(object):
         
         region_ID : the region ID to use in the "create_box" command
         
-        atom_style : a string given verbatim to the LAMMPS "atom_style" command; if not given
-        "atom_style molecular" is used
+        atom_style : a string given verbatim to the LAMMPS "atom_style" command
         
         type_offset : the number of particle types that will be used for non-rod particles
         
@@ -134,27 +170,40 @@ class Simulation(object):
         self.bond_offset = bond_offset
         
         # set LAMMPS styles (atom, pair, bond)
-        if atom_style is None:
-            atom_style = "molecular"
         self.py_lmp.atom_style(atom_style)
         
-        pair_styles_cmd = ['hybrid/overlay' if overlay else 'hybrid']
-        pair_styles_cmd.extend([' '.join([str(elem) for elem in extra_pair_style])
-                                for extra_pair_style in extra_pair_styles])
+        pair_styles_cmd = [' '.join(map(str, extra_pair_style))
+                           for extra_pair_style in extra_pair_styles]
         extra_pair_style_names = [extra_pair_style[0].strip()
                                   for extra_pair_style in extra_pair_styles]
-        self.pair_styles = set([int_type[0].strip()
-                                for int_type in self.model.int_types.values()])
+        self.pair_styles = list(set([int_type[0].strip()
+                                     for int_type in self.model.int_types.values()]))
         for pair_style in self.pair_styles:
             if pair_style in extra_pair_style_names:
                 continue
             pair_styles_cmd.append('{:s} {:f}'.format(pair_style, self.model.global_cutoff))
         
-        self.py_lmp.pair_style(' '.join(pair_styles_cmd))
-        for pair_style in self.pair_styles:
-            self.py_lmp.pair_modify('pair', pair_style, 'shift yes')
+        if len(pair_styles_cmd) == 1:
+            self._pair_style_type = ''
+        elif overlay:
+            self._pair_style_type = 'hybrid/overlay'
+        else:
+            self._pair_style_type = 'hybrid'
+        self.py_lmp.pair_style(self._pair_style_type, ' '.join(pair_styles_cmd))
         
-        self.py_lmp.bond_style('hybrid', 'zero', ' '.join(map(str, extra_bond_styles)))
+        if self._pair_style_type.startswith('hybrid'):
+            for pair_style in self.pair_styles:
+                self.py_lmp.pair_modify('pair', pair_style, 'shift yes')
+        else:
+            self.py_lmp.pair_modify('shift yes')
+        
+            
+        if len(extra_bond_styles) == 0:
+            self._bond_style_type = ''
+        else:
+            self._bond_style_type = 'hybrid'
+        
+        self.py_lmp.bond_style(self._bond_style_type, 'zero', ' '.join(extra_bond_styles))
         
         # create region_ID (with all the parameters)
         create_box_args = ' '.join(map(str,everything_else)).split()
@@ -193,17 +242,24 @@ class Simulation(object):
             self.py_lmp.mass(bead_type + type_offset,
                              self.model.rod_mass/self.model.num_beads[0])
             
-        # set interactions (initially to 0.0, of whatever interaction, between all pairs of types)
-        self._set_pair_coeff(rod_type_range, rod_type_range, (0.0, vx), self.model.global_cutoff)
-        for (type_1, type_2), eps_val in self.model.eps.iteritems():
-            sigma = self.model.bead_radii[type_1] + self.model.bead_radii[type_2]
-            type_1 += type_offset
-            type_2 += type_offset
-            self._set_pair_coeff(type_1, type_2, eps_val, sigma)
+        # set interactions initially to 0.0 between all pairs of types
+        self._set_pair_coeff(rod_type_range, rod_type_range, 0.0, vx, self.model.global_cutoff)
+        # this has to be done because some type pairs are not given in the config file,
+        # because they just don't interact at all
+        self.set_config_interactions()
         
-        self.py_lmp.bond_coeff(bond_offset + 1, 'zero')
+        if self._bond_style_type == 'hybrid':
+            self.py_lmp.bond_coeff(bond_offset + 1, 'zero')
+        else:
+            self.py_lmp.bond_coeff(bond_offset + 1)
         
         self.py_lmp.group(Simulation.rods_group, "empty")
+        
+    def get_min_rod_type(self):
+        return self.type_offset+1
+    
+    def get_max_rod_type(self):
+        return self.type_offset + max(self.model.all_bead_types)
 
     def create_rods(self, state_ID=0, **kwargs):
         '''
@@ -285,6 +341,13 @@ class Simulation(object):
         self.py_lmp.fix(Simulation.rod_dyn_fix, Simulation.rods_group, fix_name,
                         "molecule", fix_opt_args) 
         self.py_lmp.neigh_modify("exclude", "molecule/intra", Simulation.rods_group)
+    
+    def unset_rod_dynamics(self):
+        '''
+        Unsets (unfix) the integrator set by "set_rod_dynamics" (the fix ID is stored in
+        Simulation.rod_dyn_fix for manual manipulation).
+        '''
+        self.py_lmp.unfix(Simulation.rod_dyn_fix)
 
     #####################################################################################
     ### SIMULATION TOOLS ################################################################

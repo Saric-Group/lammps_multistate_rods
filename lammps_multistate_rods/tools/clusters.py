@@ -8,19 +8,19 @@ Created on 16 May 2018
 @author: Eugen Rožić
 '''
 
-def get_cluster_data(raw_data, every, model, type_offset, compute_ID):
+def get_cluster_data(raw_data, compute_ID, every, model, type_offset):
     '''
     Extracts cluster data from the raw dump file data (expected to be sorted by particle ID).
     
     raw_data : output of the "parse_dump_file" method
+    
+    compute_ID: the ID of the LAMMPS cluster compute
     
     every : every which snapshot to analyse (e.g. 10 means 9 will be skipped after each analysed)
     
     model : the lammps_multistate_rods.Model class instance which was used to generate the data
     
     type_offset : the type offset for the rod model in the simulation that generated the dump file
-    
-    compute_ID: the ID of the LAMMPS cluster compute
     
     returns : a triplet of a list of timesteps, a list of box dimensions and a corresponding list of
     snapshot_data, where "snapshot_data" is a dictionary by cluster ID's whose values are lists of

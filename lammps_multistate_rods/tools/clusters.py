@@ -76,13 +76,13 @@ def get_cluster_data(raw_data, compute_ID, every, model, type_offset):
                 current_rod = []
             current_rod.append(int(line_vars['type']))
             if cluster_id > current_cluster_id:
-                current_cluster_id = cluster_id    
-        current_rod_state = state_types_to_id(current_rod)
-        if current_cluster_id in snapshot_data:
-            snapshot_data[current_cluster_id].append((current_mol_id, current_rod_state))
-        else:
-            snapshot_data[current_cluster_id] = [(current_mol_id, current_rod_state)]
-                
+                current_cluster_id = cluster_id
+        if current_cluster_id > 0:
+            current_rod_state = state_types_to_id(current_rod)
+            if current_cluster_id in snapshot_data:
+                snapshot_data[current_cluster_id].append((current_mol_id, current_rod_state))
+            else:
+                snapshot_data[current_cluster_id] = [(current_mol_id, current_rod_state)]
         #switch keys to correspond to lowest mol_id in each cluster
         new_snapshot_data = {}
         for value in snapshot_data.values():

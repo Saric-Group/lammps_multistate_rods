@@ -80,17 +80,21 @@ class Rod_model(object):
                 command += line
                 if line.endswith(','):
                     continue
-                parts = command.split('=')
-                assign = parts[0].strip()
-                expr = parts[1].strip()
-                if assign == 'rod_states':
-                    cfg_params.rod_states = eval(expr, _globcontext, vars(cfg_params))
-                    if not isinstance(cfg_params.rod_states, (tuple, list)):
-                        raise Exception('"rod_states" has to be either a tuple or a list!')
-                    cfg_params.num_states = len(cfg_params.rod_states)
-                    cfg_params.state_structures = ['']*cfg_params.num_states
-                else: #allow whatever command, support variables to be defined etc.
-                    exec command in _globcontext, vars(cfg_params)
+                try:
+                    parts = command.split('=')
+                    assign = parts[0].strip()
+                    expr = parts[1].strip()
+                    if assign == 'rod_states':
+                        cfg_params.rod_states = eval(expr, _globcontext, vars(cfg_params))
+                        if not isinstance(cfg_params.rod_states, (tuple, list)):
+                            raise Exception('"rod_states" has to be either a tuple or a list!')
+                        cfg_params.num_states = len(cfg_params.rod_states)
+                        cfg_params.state_structures = ['']*cfg_params.num_states
+                    else: #allow whatever command, support variables to be defined etc.
+                        exec command in _globcontext, vars(cfg_params)
+                except:
+                    raise Exception('Something is wrong with the config file, in command: "'+
+                                    command+'"')
                 command = ''
         
         self.rod_radius = cfg_params.rod_radius
@@ -217,9 +221,10 @@ class Rod_model(object):
         antisym_completion = {}
         self.transitions = [[] for _ in range(self.num_states)]
         for (from_state, to_state), value in self.trans_penalty.iteritems():
-            antisym_completion[(to_state, from_state)] = -value
             self.transitions[from_state].append((to_state, value))
-            self.transitions[to_state].append((from_state, -value))
+            if self.trans_penalty.get((to_state, from_state)) == None:
+                antisym_completion[(to_state, from_state)] = -value
+                self.transitions[to_state].append((from_state, -value))
         self.trans_penalty.update(antisym_completion)
 
     def generate_mol_files(self, model_output_dir):

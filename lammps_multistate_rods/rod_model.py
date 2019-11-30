@@ -70,11 +70,11 @@ class Rod_model(object):
         with open(config_file_path,'r') as config_file:
             command = ''
             for line in config_file:
-                line = line.strip()
                 try:
                     line = line[:line.index('#')]
                 except ValueError: #no '#' in line
                     pass
+                line = line.strip()
                 if line == '':
                     continue
                 command += line
@@ -100,9 +100,13 @@ class Rod_model(object):
         self.rod_mass = cfg_params.rod_mass
         self.rod_states = cfg_params.rod_states
         self.num_states = cfg_params.num_states
-        self.state_structures = map(lambda y: map(lambda x: map(int, x.split('-')),
-                                                  y.split('|')),
-                                    cfg_params.state_structures)
+        try:
+            self.state_structures = map(lambda y: map(lambda x: map(int, x.split('-')),
+                                                      y.split('|')),
+                                        cfg_params.state_structures)
+        except:
+            raise Exception('The "state_structures" have to contain only integers \
+                             separated by "|" or "-".')
         
         self.num_patches = None #dependent on "state_structures"
         self.num_beads = None #dependent on "state_structures"
@@ -167,8 +171,14 @@ class Rod_model(object):
                         raise Exception('Beads of the same type have to have the same radius!') 
         
         self.total_beads = sum(self.num_beads)
-        self.body_bead_overlap = ((2*self.rod_radius*self.num_beads[0] - self.rod_length) /
-                                 (self.num_beads[0] - 1))
+        if self.total_beads == 1:
+            print "WARNING: The rods contain only one bead in total - no bonds will be defined and the rigid fix won't work!"
+            
+        if self.num_beads[0] > 1:
+            self.body_bead_overlap = ((2*self.rod_radius*self.num_beads[0] - self.rod_length) /
+                                      (self.num_beads[0] - 1))
+        else:
+            self.body_bead_overlap = 0
         
         if len(self.patch_angles) != self.num_patches:
             raise Exception("The length of patch_angles doesn't match the number of defined patches!")
@@ -230,7 +240,8 @@ class Rod_model(object):
                 mol_file.write("(AUTO-GENERATED file by the lammps_multistate_rods library, any changes will be OVERWRITTEN)\n\n")
                 
                 mol_file.write("{:d} atoms\n\n".format(self.total_beads))
-                mol_file.write("{:d} bonds\n\n".format(self.total_beads))
+                if self.total_beads > 1:
+                    mol_file.write("{:d} bonds\n\n".format(self.total_beads))
                 
                 mol_file.write("Coords\n\n")
                 n = 1
@@ -256,8 +267,9 @@ class Rod_model(object):
                         mol_file.write("{:2d} {:d}\n".format(n, bead_type))
                         n += 1
                 
-                mol_file.write("\nBonds\n\n")
-                for i in range(1, self.total_beads):
-                    mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(i, i, i+1))
-                mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(self.total_beads, self.total_beads, 1))
+                if self.total_beads > 1:
+                    mol_file.write("\nBonds\n\n")
+                    for i in range(1, self.total_beads):
+                        mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(i, i, i+1))
+                    mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(self.total_beads, self.total_beads, 1))
     

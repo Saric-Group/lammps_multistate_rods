@@ -43,4 +43,4 @@ The requirements for using the library are:
         ```  
         git clone -b develop https://github.com/erozic/lammps.git <LAMMPS_dir>  
         ```
-        Currently it contains the `cosine/squared` pair style that is not yet in the standard LAMMPS distribution, along with the `lammps_get_pe` library function (that will never be included in standard LAMMPS) and possibly some other non-essential things. All in all, the library should work with the official LAMMPS (8 Feb 2019, last I checked), but not optimally and with reduced capabilities and I don't guarantee it and I strongly suggest using the develop branch of my LAMMPS fork.
+        It contains the `lammps_get_pe` library function (that will never be included in standard LAMMPS) and possibly some other non-essential things and all future updates relevant for this library. All in all, the library should work with the official LAMMPS (8 Feb 2019, last I checked), but not optimally and with reduced capabilities and I don't guarantee it and strongly suggest using the develop branch of my LAMMPS fork.

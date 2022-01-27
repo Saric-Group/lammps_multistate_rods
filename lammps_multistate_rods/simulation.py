@@ -11,7 +11,7 @@ from math import exp, sqrt, pi
 from random import Random
 
 from lammps import PyLammps
-from ctypes import c_int, c_double
+from ctypes import c_int, c_double, c_void_p
 
 from rod import Rod
 from rod_model import vx
@@ -53,6 +53,15 @@ class Simulation(object):
         if not isinstance(py_lmp, PyLammps):
             raise Exception("py_lmp has to be an instance of lammps.PyLammps!")
         self.py_lmp = py_lmp
+        self.lib_pe_flag = True
+        try:
+            self.py_lmp.lmp.lib.lammps_get_pe.argtypes = [c_void_p, c_int]
+            self.py_lmp.lmp.lib.lammps_get_pe.restype = c_double
+        except:
+            print 'WARNING: LAMMPS library has no "lammps_get_pe" method! Using'\
+                  ' the (much) less efficient "run 0 post no"...'
+            self.lib_pe_flag = False
+        
         self.random = Random(seed)
         
         self.model = model
@@ -424,13 +433,9 @@ class Simulation(object):
         new_state, penalty = candidate_states[self.random.randrange(0, len(candidate_states))] # certainty a try will be made
         rod.set_state(new_state)
         
-        try:
-            self.py_lmp.lmp.lib.lammps_get_pe.restype = c_double
+        if self.lib_pe_flag:
             U_after = self.py_lmp.lmp.lib.lammps_get_pe(self.py_lmp.lmp.lmp, neigh_flag)
-        except:
-            # use these if library has no "lammps_get_pe" method
-            print 'WARNING: LAMMPS library has no "lammps_get_pe" method! Using'\
-                  ' the (much) less efficient "run 0 post no"...'
+        else:
             self.py_lmp.command('run 0 post no')
             U_after = self.py_lmp.lmp.extract_compute("thermo_pe", 0, 0)
         

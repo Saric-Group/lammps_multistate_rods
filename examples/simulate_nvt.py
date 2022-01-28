@@ -58,7 +58,6 @@ else:
 
 #========================================================================================
 
-#from mpi4py import MPI #TODO make MPI work...
 from lammps import PyLammps
 import lammps_multistate_rods as rods
 
@@ -101,42 +100,9 @@ simulation.set_rod_dynamics("nve")
 
 py_lmp.neigh_modify("every 1 delay 1")
 
-# GROUPS & COMPUTES
-if hasattr(run_args, 'micelle_cutoff') and run_args.micelle_cutoff > 0.0:
-    micelle_group = 'active_sol_beads'
-    py_lmp.variable('active_sol', 'atom', '"' + 
-                    ' || '.join(['(type == {:d})'.format(t) for t in
-                                    filter(lambda t: t in model.state_bead_types[0],
-                                           model.active_bead_types)])
-                    + '"')
-    py_lmp.group(micelle_group, 'dynamic', simulation.rods_group,
-                 'var', 'active_sol', 'every', out_freq)
-    micelle_compute = "rod_micelle"
-    py_lmp.compute(micelle_compute, micelle_group, 'aggregate/atom', run_args.micelle_cutoff)
-    
-if hasattr(run_args, 'fibril_cutoff') and run_args.fibril_cutoff > 0.0:
-    fibril_group = 'active_beta_beads'
-    py_lmp.variable('active_beta', 'atom', '"' + 
-                    ' || '.join(['(type == {:d})'.format(t) for t in
-                                    filter(lambda t: t in model.state_bead_types[1],
-                                           model.active_bead_types)])
-                    + '"')
-    py_lmp.group(fibril_group, 'dynamic', simulation.rods_group,
-                 'var', 'active_beta', 'every', out_freq)
-    fibril_compute = "rod_fibril"
-    py_lmp.compute(fibril_compute, fibril_group, 'aggregate/atom', run_args.fibril_cutoff)
-
 # OUTPUT
 py_lmp.thermo_style("custom", "step atoms", "pe temp")
 dump_elems = "id x y z type mol"
-try:
-    dump_elems += " c_"+micelle_compute
-except:
-    pass #isn't defined
-try:
-    dump_elems += " c_"+fibril_compute
-except:
-    pass #isn't defined
 py_lmp.dump("dump_cmd", "all", "custom", out_freq, dump_path, dump_elems)
 py_lmp.dump_modify("dump_cmd", "sort id")
 py_lmp.thermo(out_freq)
@@ -154,7 +120,7 @@ else:
     py_lmp.command('run {:d} post no'.format(run_args.run_length-1)) #so output happens after state changes
     remaining = args.simlen - run_args.run_length + 1
     for i in range(args.simlen / run_args.run_length):
-        success = simulation.state_change_MC(mc_moves_per_run)#, replenish=("box", 2*model.rod_radius, 10)) TODO
+        success = simulation.state_change_MC(mc_moves_per_run)
         if not args.silent:
             base_count = simulation.state_count(0)
             beta_count = simulation.state_count(1)

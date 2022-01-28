@@ -5,3 +5,6 @@
 .settings
 
 *.pyc
+
+log.*
+*.log

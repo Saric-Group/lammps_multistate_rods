@@ -54,17 +54,17 @@ def fibril(model, N, phi, theta, r0, output_path):
         if i % 2 == 0:
             locations[i] = np.array([0, (i-N/2)*rod_radius, -rod_radius+0.50])#+0.27692])
             locations[i] = R_tot.rotate(locations[i]) + r0
-            if R_tot.angle == 0.0:
-                rotations[i] = (R_tot.angle, [1.0, 0.0, 0.0])
+            if R_tot.degrees == 0.0:
+                rotations[i] = (R_tot.degrees, [1.0, 0.0, 0.0])
             else:
-                rotations[i] = (R_tot.angle, R_tot.axis)
+                rotations[i] = (R_tot.degrees, R_tot.axis)
         else:
             locations[i] = np.array([0, (i-N/2)*rod_radius, +rod_radius-0.50])#-0.27692])
             locations[i] = R_tot.rotate(locations[i]) + r0
-            if R_tot_inv.angle == 0.0:
-                rotations[i] = (R_tot_inv.angle, [1.0, 0.0, 0.0])
+            if R_tot_inv.degrees == 0.0:
+                rotations[i] = (R_tot_inv.degrees, [1.0, 0.0, 0.0])
             else:
-                rotations[i] = (R_tot_inv.angle, R_tot_inv.axis)
+                rotations[i] = (R_tot_inv.degrees, R_tot_inv.axis)
         
         for j in range(3):
             if locations[i][j] > maxs[j]:
@@ -108,5 +108,5 @@ def single(r0, phi, theta, output_path):
     with open(output_path, 'w') as output_file:
         output_file.write('monomers: 1\n\n')
         output_file.write('{:.2f} {:.2f} {:.2f} {:.2f} {:.3f} {:.3f} {:.3f}\n'.format(
-            r0[0], r0[1], r0[2], R_tot.angle, *R_tot.get_axis(undefined=[0.0, 0.0, 1.0])))
+            r0[0], r0[1], r0[2], R_tot.degrees, *R_tot.get_axis(undefined=[0.0, 0.0, 1.0])))
         output_file.write('\n')

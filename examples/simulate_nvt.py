@@ -91,7 +91,7 @@ py_lmp.region("box", "block", -run_args.num_cells / 2, run_args.num_cells / 2,
                               -run_args.num_cells / 2, run_args.num_cells / 2,
                               -run_args.num_cells / 2, run_args.num_cells / 2)
 simulation.setup("box")
-simulation.create_rods(box = None)
+simulation.create_rods()
 
 # DYNAMICS
 py_lmp.fix("thermostat", "all", "langevin",
@@ -120,7 +120,8 @@ else:
     py_lmp.command('run {:d} post no'.format(run_args.run_length-1)) #so output happens after state changes
     remaining = args.simlen - run_args.run_length + 1
     for i in range(args.simlen / run_args.run_length):
-        success = simulation.state_change_MC(mc_moves_per_run)
+        success = simulation.state_change_MC(mc_moves_per_run, replenish = ("box", model.rod_length/2, 10))
+        #TODO redefine dynamics (fixes) if new rods were created with replenish... !?!
         if not args.silent:
             base_count = simulation.state_count(0)
             beta_count = simulation.state_count(1)

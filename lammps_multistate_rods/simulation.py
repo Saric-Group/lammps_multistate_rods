@@ -78,8 +78,6 @@ class Simulation(object):
         self._nrods = 0
         self._rod_counters = [0]*model.num_states
         
-        self.to_replenish = 0 #TODO ?!?!
-        
     def _set_pair_coeff(self, type_1, type_2, eps, int_type_key, sigma):
         
         if type_1 > type_2:
@@ -455,7 +453,7 @@ class Simulation(object):
             rod.set_state(old_state) # revert change back
             return (0, U_before)
 
-    def state_change_MC(self, ntries, optimise=None, replenish=None):
+    def state_change_MC(self, ntries, optimise=None):
         '''
         Tries to make "ntries" Monte Carlo state changes on randomly selected rods that are
         presumed to be equilibrated to the simulation temperature.
@@ -466,8 +464,6 @@ class Simulation(object):
         NOTE: using optimisation while corresponding beads in different states have
         a different style of pair interaction MAY, and most probably WILL, lead to
         wrong energy calculations!
-        
-        replenish : a triplet of (region_ID, exclude, maxtries)
         
         returns : the number of accepted moves
         '''
@@ -488,21 +484,9 @@ class Simulation(object):
         success = 0
         for _ in range(ntries):
             rand_rod = self.get_random_rod()
-            init_state = rand_rod.state
             (acpt, U_current) = self._try_state_change(rand_rod, U_current, T_current,
                                                        neigh_flag)
             success += acpt
-            if init_state == 0:
-                self.to_replenish += acpt #if changed from base state
-            elif rand_rod.state == 0:
-                self.to_replenish -= acpt #if changed to base state
-                
-        if replenish and self.to_replenish > 0:
-            #TODO not good that the seed is the same every time - this should change every time
-            self.create_rods(random = (self.to_replenish, self.seed, replenish[0],
-                                       "exclude", replenish[1], "maxtries", replenish[2]))
-            self.to_replenish = 0
-            #TODO dynamic fixes should be redefined if new particles were created !!
     
         self.py_lmp.command('print "state_change_MC: {:d}/{:d} (delta_U = {:f})"'.format(
                             success, ntries, U_start - U_current))

@@ -98,38 +98,26 @@ py_lmp.fix("thermostat", "all", "langevin",
            run_args.temp, run_args.temp, run_args.damp, seed)#, "zero yes")
 simulation.set_rod_dynamics("nve")
 
+mc_moves_per_run = 0
+if model.num_states > 1:
+    mc_moves_per_run = int(run_args.mc_moves * simulation.rods_count())
+
+#TODO simulation.set_state_dynamics(...)
+
+concentration = 0 #TODO ??
+
+#TODO simulation.set_state_concentration(concentration, state_ID=0) 
+
 py_lmp.neigh_modify("every 1 delay 1")
 
 # OUTPUT
+#TODO state change accept rate, rod state ratio, ... (args.silent)
 py_lmp.thermo_style("custom", "step atoms", "pe temp")
 dump_elems = "id x y z type mol"
 py_lmp.dump("dump_cmd", "all", "custom", out_freq, dump_path, dump_elems)
 py_lmp.dump_modify("dump_cmd", "sort id")
 py_lmp.thermo(out_freq)
-
-# RUN...
-mc_moves_per_run = 0
-if model.num_states > 1:
-    mc_moves_per_run = int(run_args.mc_moves * simulation.rods_count())
     
 py_lmp.timestep(run_args.dt)
 
-if mc_moves_per_run == 0:
-    py_lmp.command('run {:d}'.format(args.simlen))
-else:
-    py_lmp.command('run {:d} post no'.format(run_args.run_length-1)) #so output happens after state changes
-    remaining = args.simlen - run_args.run_length + 1
-    for i in range(args.simlen / run_args.run_length):
-        success = simulation.state_change_MC(mc_moves_per_run)
-        if not args.silent:
-            base_count = simulation.state_count(0)
-            beta_count = simulation.state_count(1)
-            print 'step {:d} / {:d} :  beta-to-soluble ratio = {:d}/{:d} = {:.5f} (accept rate = {:.5f})'.format(
-                    (i+1)*run_args.run_length, args.simlen, beta_count, base_count, 
-                    float(beta_count)/base_count, float(success)/mc_moves_per_run)
-        
-        if remaining / run_args.run_length > 0:
-            py_lmp.command('run {:d} post no'.format(run_args.run_length))
-            remaining -= run_args.run_length
-        else:
-            py_lmp.command('run {:d} post no'.format(remaining))
+py_lmp.command('run {:d}'.format(args.simlen))

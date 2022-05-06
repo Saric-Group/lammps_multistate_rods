@@ -241,9 +241,8 @@ class Rod_model(object):
                 print "WARNING: {:s} already exists, won't overwrite it...".format(output_path)
                 continue
             with open(output_path, "w") as mol_file:
-                
-                mol_file.write("(AUTO-GENERATED file by the lammps_multistate_rods library, any changes will be OVERWRITTEN)\n\n")
-                
+                mol_file.write("(AUTO-GENERATED file by the lammps_multistate_rods library, "\
+                               "any changes will be OVERWRITTEN)\n\n")
                 mol_file.write("{:d} atoms\n\n".format(self.total_beads))
                 if self.total_beads > 1:
                     mol_file.write("{:d} bonds\n\n".format(self.total_beads))
@@ -277,4 +276,18 @@ class Rod_model(object):
                     for i in range(1, self.total_beads):
                         mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(i, i, i+1))
                     mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(self.total_beads, self.total_beads, 1))
-    
+
+    def generate_trans_file(self, filename):
+        '''
+        Generates the file that contains the transition penalties between rod states
+        to be used in the change/state FIX.
+        '''
+        if os.path.exists(filename):
+            print "WARNING: {:s} already exists, won't overwrite it...".format(filename)
+            return
+        with open(filename, "w") as trans_file:                
+            trans_file.write("(AUTO-GENERATED file by the lammps_multistate_rods library, "\
+                             "any changes will be OVERWRITTEN)\n\n")
+            for (from_state, to_state), penalty in self.trans_penalty.iteritems():
+                trans_file.write("{} {} {}\n".format(
+                    self.rod_states[from_state], self.rod_states[to_state], penalty));

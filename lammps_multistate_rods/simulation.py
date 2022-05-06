@@ -467,7 +467,7 @@ class Simulation(object):
         a different style of pair interaction MAY, and most probably WILL, lead to
         wrong energy calculations!
         
-        replenish : a triplet of (region_ID, exclude, maxtries)
+        replenish : a triplet of (region_ID, overlap, maxtry)
         
         returns : the number of accepted moves
         '''
@@ -500,9 +500,9 @@ class Simulation(object):
         if replenish and self.to_replenish > 0:
             #TODO not good that the seed is the same every time - this should change every time
             self.create_rods(random = (self.to_replenish, self.seed, replenish[0],
-                                       "exclude", replenish[1], "maxtries", replenish[2]))
+                                       "overlap", replenish[1], "maxtry", replenish[2]))
             self.to_replenish = 0
-            #TODO dynamic fixes should be redefined if new particles were created !!
+            #TODO dynamic fixes should be redefined if new particles were created !?!
     
         self.py_lmp.command('print "state_change_MC: {:d}/{:d} (delta_U = {:f})"'.format(
                             success, ntries, U_start - U_current))

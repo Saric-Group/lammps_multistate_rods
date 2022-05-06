@@ -120,7 +120,8 @@ else:
     py_lmp.command('run {:d} post no'.format(run_args.run_length-1)) #so output happens after state changes
     remaining = args.simlen - run_args.run_length + 1
     for i in range(args.simlen / run_args.run_length):
-        success = simulation.state_change_MC(mc_moves_per_run, replenish = ("box", model.rod_length/2, 10))
+        success = simulation.state_change_MC(mc_moves_per_run,
+                                             replenish = ("box", 2.1*model.rod_radius, 10))
         #TODO redefine dynamics (fixes) if new rods were created with replenish... !?!
         if not args.silent:
             base_count = simulation.state_count(0)

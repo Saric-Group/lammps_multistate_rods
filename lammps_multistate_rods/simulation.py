@@ -11,7 +11,6 @@ from math import sqrt, pi
 from random import Random
 
 from lammps import PyLammps
-from ctypes import c_int
 
 from rod_model import vx
 
@@ -34,7 +33,9 @@ class Simulation(object):
     simulation as necessary, in between LAMMPS "run" commands.
     '''
     
-    rods_group = "rods" # name of the LAMMPS group which holds all particles of all the rods
+    rods_group = "rods" # name of LAMMPS group which holds all particles of all the rods
+    rods_group_var = rods_group + "_count" # name of LAMMPS var which counts the rods_group
+    
     rod_dyn_fix = "rod_dynamics"
     rod_states_fix = "rod_states"
     
@@ -65,9 +66,14 @@ class Simulation(object):
         # simulation properties (most of which to be set in "setup" and "create_rods")
         self.seed = seed
         self.type_offset = None
-        self._state_types = None
         self.bond_offset = None
         self.pair_styles = None
+        
+        self.state_groups = [None]*model.num_states
+        self.state_group_vars = [None]*model.num_states
+        for i in range(model.num_states):
+            self.state_groups[i] = "{}_{}".format(model.rod_states[i], Simulation.rods_group)
+            self.state_group_vars[i] = "{}_count".format(self.state_groups[i])
         
     def _set_pair_coeff(self, type_1, type_2, eps, int_type_key, sigma):
         
@@ -189,9 +195,6 @@ class Simulation(object):
         '''
         # set instance variables
         self.type_offset = type_offset
-        self._state_types = [ (self.model.total_beads*c_int)(
-            *[ elem + type_offset for patch in state_struct for elem in patch])
-            for state_struct in self.model.state_structures]
         self.bond_offset = bond_offset
         
         # set LAMMPS styles (atom, pair, bond)
@@ -278,9 +281,14 @@ class Simulation(object):
         else:
             self.py_lmp.bond_coeff(bond_offset + 1)
         
+        # create LAMMPS groups and variables for rods (general and each state)
         self.py_lmp.group(Simulation.rods_group, "empty")
-        for state_name in self.model.rod_states:
-            self.py_lmp.group(state_name, "empty")
+        self.py_lmp.variable(Simulation.rods_group_var, "equal",
+                             "count({})".format(Simulation.rods_group))
+        for i in range(self.model.num_states):
+            self.py_lmp.group(self.state_groups[i], "empty")
+            self.py_lmp.variable(self.state_group_vars[i], "equal",
+                                 "count({})".format(self.state_groups[i]))        
         
     def get_min_rod_type(self):
         return self.type_offset+1
@@ -318,7 +326,6 @@ class Simulation(object):
             id_offset = 0
     
         state_template = self.model.rod_states[state_ID]
-        state_group = state_template
         
         if len(kwargs) == 0: #default
             self.py_lmp.create_atoms(0, "box",
@@ -349,7 +356,7 @@ class Simulation(object):
             with open(params[0], 'r') as rods_file:
                 N = int(rods_file.readline().split()[1])
                 rods_file.readline()
-                for i in range(N):
+                for _ in range(N):
                     vals = map(float, rods_file.readline().split())
                     self.py_lmp.create_atoms(0, "single", vals[0], vals[1], vals[2],
                                              "mol", state_template, self.seed,
@@ -358,10 +365,10 @@ class Simulation(object):
         else:
             raise Exception('Unsupported option(s) ({:s}) passed to "create_rods"!'.format(kwargs))
         
-        # create & populate LAMMPS groups
+        # update LAMMPS groups for rods
         self.py_lmp.group("temp_new_rods", "id >", id_offset)
         self.py_lmp.group(Simulation.rods_group, "union", Simulation.rods_group, "temp_new_rods")
-        self.py_lmp.group(state_group, "union", state_group, "temp_new_rods")
+        self.py_lmp.group(self.state_groups[state_ID], "union", self.state_groups[state_ID], "temp_new_rods")
         self.py_lmp.group("temp_new_rods", "clear")
     
     def set_rod_dynamics(self, ensemble = "", everything_else=[]):
@@ -370,6 +377,8 @@ class Simulation(object):
         
         everything_else : a list containing additional arguments that will be passed verbatim as a single
         space-separated string to the LAMMPS "fix" command (e.g. langevin, temp, iso, ...)
+        
+        returns: the fix ID (for convenience; available at Simulation.rod_dyn_fix)
         '''
         fix_opt_args = ' '.join(map(str,everything_else))
         
@@ -379,6 +388,8 @@ class Simulation(object):
         self.py_lmp.fix(Simulation.rod_dyn_fix, Simulation.rods_group, fix_name,
                         "molecule", fix_opt_args) 
         self.py_lmp.neigh_modify("exclude", "molecule/intra", Simulation.rods_group)
+        
+        return Simulation.rod_dyn_fix
     
     def unset_rod_dynamics(self):
         '''
@@ -390,9 +401,13 @@ class Simulation(object):
     def set_state_dynamics(self): #TODO rethink name of method, add args
         '''
         Sets the "change/state" fix ... TODO
+        
+        returns: the fix ID (for convenience; available at Simulation.rod_states_fix)
         '''
         #TODO ... use Simulation.rod_states_fix
         raise NotImplementedError()
+        
+        return Simulation.rod_states_fix
     
     #TODO unset_state_dynamics ??
     
@@ -413,16 +428,14 @@ class Simulation(object):
 
     def rods_count(self):
         '''
-        Returns the number of rods in the Simulation.rods_group of the LAMMPS simulation.
+        Returns the number of rods in the simulation (via group atom count)
         '''
-        #TODO
-        raise NotImplementedError()
-        return -1
+        lmp_out = self.py_lmp.lmp_print('"$({})"'.format(Simulation.rods_group_var))
+        return int(lmp_out.strip()) / self.model.total_beads
 
-    def state_count(self, state_id):
+    def state_count(self, state_ID):
         '''
-        Returns the number of rods in the LAMMPS group of the state given by ID.
+        Returns the number of rods of the given state in the simulation (via group atom count)
         '''
-        #TODO
-        raise NotImplementedError()
-        return -1
+        lmp_out = self.py_lmp.lmp_print('"$({})"'.format(self.state_group_vars[state_ID]))
+        return int(lmp_out.strip()) / self.model.total_beads

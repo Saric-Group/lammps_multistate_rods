@@ -241,9 +241,8 @@ class Rod_model(object):
                 print "WARNING: {:s} already exists, won't overwrite it...".format(output_path)
                 continue
             with open(output_path, "w") as mol_file:
-                
-                mol_file.write("(AUTO-GENERATED file by the lammps_multistate_rods library, any changes will be OVERWRITTEN)\n\n")
-                
+                mol_file.write("(AUTO-GENERATED file by the lammps_multistate_rods library, "\
+                               "any changes will be OVERWRITTEN)\n\n")
                 mol_file.write("{:d} atoms\n\n".format(self.total_beads))
                 if self.total_beads > 1:
                     mol_file.write("{:d} bonds\n\n".format(self.total_beads))

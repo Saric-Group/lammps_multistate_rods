@@ -141,7 +141,7 @@ class Simulation(object):
         
         This is achieved by removing all interactions between active bead types of this rod state
         and any other active rod beads, with the exception of body bead types whose interaction is
-        set to volume-exclusion with other body bead types (of strength vx_eps) 
+        set to volume-exclusion with other body bead types (of strength vx_eps).
         '''
         active_filter = lambda t: t in self.model.active_bead_types
         for t1 in filter(active_filter, self.model.state_bead_types[state_ID]):
@@ -323,25 +323,32 @@ class Simulation(object):
         else:
             id_offset = 0
         
-        if "box" in kwargs.keys():
-            params = kwargs['box']
-            if not params:
-                params = []
+        if len(kwargs) == 0: #default
+            self.py_lmp.create_atoms(0, "box",
+                                     "mol", self.model.rod_states[state_ID], self.seed)
+        elif "box" in kwargs.keys():
+            params = kwargs['box'] if kwargs['box'] else []
             self.py_lmp.create_atoms(0, "box",
                                      "mol", self.model.rod_states[state_ID], self.seed,
                                      ' '.join(map(str, params)))
         elif "region" in kwargs.keys():
             params = kwargs['region']
+            if len(params) < 1:
+                raise Exception('The "region" option has to come with at least 1 argument (the region ID)!')
             self.py_lmp.create_atoms(0, "region", params[0],
                                      "mol", self.model.rod_states[state_ID], self.seed,
                                      ' '.join(map(str, params[1:])))
         elif "random" in kwargs.keys():
             params = kwargs['random']
+            if len(params) < 3:
+                raise Exception('The "random" option has to come with at least 3 arguments (N, seed and a region ID)!')
             self.py_lmp.create_atoms(0, "random", params[0], params[1], params[2],
                                      "mol", self.model.rod_states[state_ID], self.seed,
                                      ' '.join(map(str, params[3:])))
         elif "file" in kwargs.keys():
             params = kwargs['file']
+            if len(params) < 1:
+                raise Exception('The "file" option has to come with at least 1 argument (the file path)!')
             with open(params[0], 'r') as rods_file:
                 N = int(rods_file.readline().split()[1])
                 rods_file.readline()
@@ -351,13 +358,10 @@ class Simulation(object):
                                              "mol", self.model.rod_states[state_ID], self.seed,
                                              "rotate", vals[3], vals[4], vals[5], vals[6],
                                              "units box", ' '.join(map(str, params[1:])))
-        elif len(kwargs) == 0: #default
-            self.py_lmp.create_atoms(0, "box",
-                                     "mol", self.model.rod_states[state_ID], self.seed)
         else:
-            raise Exception('Unknown options ({:s}) passed to "create_rods"!'.format(kwargs))
+            raise Exception('Unsupported option(s) ({:s}) passed to "create_rods"!'.format(kwargs))
         
-        # create & populate LAMMPS groups (and setup cluster tracking)
+        # create & populate LAMMPS groups
         self.py_lmp.group("temp_new_rods", "id >", id_offset)
         self.py_lmp.group(Simulation.rods_group, "union", Simulation.rods_group, "temp_new_rods")
         self.py_lmp.group("temp_new_rods", "clear")

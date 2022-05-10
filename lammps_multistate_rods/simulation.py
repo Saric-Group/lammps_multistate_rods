@@ -37,7 +37,7 @@ class Simulation(object):
     rods_group_var = rods_group + "_count" # name of LAMMPS var which counts the rods_group
     
     rod_dyn_fix = "rod_dynamics"
-    rod_states_fix = "rod_states"
+    state_trans_fix = "state_transitions"
     
     def __init__(self, py_lmp, model, seed, output_dir):
         '''
@@ -385,8 +385,20 @@ class Simulation(object):
         ensemble = ensemble.strip().lower()
         fix_name = "rigid/"+ensemble+"/small" if ensemble != "" else "rigid/small"
     
-        self.py_lmp.fix(Simulation.rod_dyn_fix, Simulation.rods_group, fix_name,
-                        "molecule", fix_opt_args) 
+        output = self.py_lmp.fix(Simulation.rod_dyn_fix, Simulation.rods_group, fix_name,
+                                 "molecule", fix_opt_args)
+        try:
+            for line in output:
+                if "max distance" in line:
+                    rigid_body_extent = float(line.split("=")[0])
+                    break
+            # will be ignored if < neighbor cutoff (max pair cutoff + skin) so OK...
+            self.py_lmp.comm_modify("cutoff", (1+10**-8)*rigid_body_extent)
+            # the (1+10^-8) factor is needed because rigid/small outputs "maxextent" to the 8th decimal place
+        except:
+            print "WARNING: LAMMPS output to screen probably suppressed; needs to be enabled "\
+                  "in order for 'lammps_multistate_rods' library to function properly"
+        
         self.py_lmp.neigh_modify("exclude", "molecule/intra", Simulation.rods_group)
         
         return Simulation.rod_dyn_fix
@@ -398,18 +410,37 @@ class Simulation(object):
         '''
         self.py_lmp.unfix(Simulation.rod_dyn_fix)
         
-    def set_state_dynamics(self): #TODO rethink name of method, add args
+    def set_state_transitions(self, every, attempts, temperature, everything_else=[]):
         '''
-        Sets the "change/state" fix ... TODO
+        Sets the "change/state" fix that does Monte Carlo changing of states of rods.
         
-        returns: the fix ID (for convenience; available at Simulation.rod_states_fix)
+        every : how often will the fix be called (every that many steps)
+        
+        attempts : how many MC attempts will be made per call of the fix
+        
+        temperature : the ideal temperature of the simulation (needed for energy penalties which
+        are assumed to be in kT units)
+        
+        everything_else : a list containing additional arguments that will be passed verbatim as a single
+        space-separated string to the LAMMPS "fix" command (e.g. antisym, full_energy, pe, ...)
+        
+        returns: the fix ID (for convenience; available at Simulation.state_trans_fix)
         '''
-        #TODO ... use Simulation.rod_states_fix
-        raise NotImplementedError()
-        
-        return Simulation.rod_states_fix
+        fix_opt_args = ' '.join(map(str,everything_else))
     
-    #TODO unset_state_dynamics ??
+        self.py_lmp.fix(Simulation.state_trans_fix, Simulation.rods_group, "change/state",
+                        every, attempts, self.seed, temperature,
+                        "mols", " ".join([rod_state for rod_state in self.model.rod_states]),
+                        "trans_pens", self.trans_file, fix_opt_args)
+        
+        return Simulation.state_trans_fix
+    
+    def unset_state_transitions(self):
+        '''
+        Unsets (unfix) the "change/state" fix set by the "set_state_transitions" method (the fix ID
+        is stored in Simulation.state_trans_fix for manual manipulation).
+        '''
+        self.py_lmp.unfix(Simulation.state_trans_fix)
     
     def set_state_concentration(self, c, state_ID=0): #TODO rethink name of method, add args
         '''

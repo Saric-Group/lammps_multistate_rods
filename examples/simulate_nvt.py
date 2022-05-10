@@ -78,7 +78,7 @@ execfile(args.run_file, {'__builtins__': None}, vars(run_args))
 
 out_freq = args.output_freq if args.output_freq != None else run_args.run_length
 
-py_lmp = PyLammps(cmdargs=['-screen','none'])
+py_lmp = PyLammps()
 py_lmp.log('"'+log_path+'"')
 model = rods.Rod_model(args.cfg_file)
 simulation = rods.Simulation(py_lmp, model, seed, output_folder)
@@ -102,7 +102,7 @@ mc_moves_per_run = 0
 if model.num_states > 1:
     mc_moves_per_run = int(run_args.mc_moves * simulation.rods_count())
 
-#TODO simulation.set_state_dynamics(...)
+simulation.set_state_transitions(run_args.run_length, mc_moves_per_run, run_args.temp)
 
 concentration = 0 #TODO ??
 
@@ -120,4 +120,4 @@ py_lmp.thermo(out_freq)
     
 py_lmp.timestep(run_args.dt)
 
-py_lmp.command('run {:d}'.format(args.simlen))
+py_lmp.run(args.simlen)

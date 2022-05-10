@@ -245,7 +245,7 @@ class Rod_model(object):
                                "any changes will be OVERWRITTEN)\n\n")
                 mol_file.write("{:d} atoms\n\n".format(self.total_beads))
                 if self.total_beads > 1:
-                    mol_file.write("{:d} bonds\n\n".format(self.total_beads))
+                    mol_file.write("{:d} bonds\n\n".format(self.total_beads-1))
                 
                 mol_file.write("Coords\n\n")
                 n = 1
@@ -273,9 +273,14 @@ class Rod_model(object):
                 
                 if self.total_beads > 1:
                     mol_file.write("\nBonds\n\n")
-                    for i in range(1, self.total_beads):
-                        mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(i, i, i+1))
-                    mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(self.total_beads, self.total_beads, 1))
+                    n = 1
+                    for k in range(len(self.num_beads)):
+                        if k > 0:
+                            mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(n, 1, n+1))
+                            n += 1
+                        for _ in range(self.num_beads[k]-1):
+                            mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(n, n, n+1))
+                            n += 1
 
     def generate_trans_file(self, filename):
         '''

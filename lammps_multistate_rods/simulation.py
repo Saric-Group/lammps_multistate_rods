@@ -502,14 +502,14 @@ class Simulation(object):
 
     def rods_count(self):
         '''
-        Returns the number of rods in the simulation (via group atom count)
+        Returns the number of rods in the simulation (via rods group atom count)
         '''
         lmp_out = self.py_lmp.lmp_print('"$(v_{})"'.format(Simulation.rods_group_var))
         return int(lmp_out.strip())
 
     def state_count(self, state_ID):
         '''
-        Returns the number of rods of the given state in the simulation (via group atom count)
+        Returns the number of rods of the given state in the simulation (via state group atom count)
         '''
         lmp_out = self.py_lmp.lmp_print('"$(v_{})"'.format(self.state_group_vars[state_ID]))
         return int(lmp_out.strip())

@@ -76,13 +76,17 @@ log_path = os.path.join(output_folder, log_filename)
 run_args = rods.rod_model.Params()
 execfile(args.run_file, {'__builtins__': None}, vars(run_args))
 
-out_freq = args.output_freq if args.output_freq != None else run_args.run_length
+out_freq = args.output_freq if args.output_freq != None else run_args.mc_every
 
-py_lmp = PyLammps()
-py_lmp.log('"'+log_path+'"')
+if args.silent:
+    py_lmp = PyLammps()
+else:
+    py_lmp = PyLammps(cmdargs = ['-echo', 'both'])
+py_lmp.log('"' + log_path + '"')
 model = rods.Rod_model(args.cfg_file)
-simulation = rods.Simulation(py_lmp, model, seed, output_folder)
+simulation = rods.Simulation(py_lmp, model, run_args.temp, seed, output_folder)
 
+# SETUP AND CREATION
 py_lmp.units("lj")
 py_lmp.dimension(3)
 py_lmp.boundary("p p p")
@@ -91,33 +95,41 @@ py_lmp.region("box", "block", -run_args.num_cells / 2, run_args.num_cells / 2,
                               -run_args.num_cells / 2, run_args.num_cells / 2,
                               -run_args.num_cells / 2, run_args.num_cells / 2)
 simulation.setup("box")
-simulation.create_rods()
+#simulation.create_rods() #same as "box = None"
+# Sensible example for random creation:
+overlap = (2.1 * model.rod_radius) / run_args.cell_size
+maxtry = 10
+simulation.create_rods(state_ID = 0, random = [int(run_args.num_cells**3), seed, "box",
+                        "overlap", overlap, "maxtry", maxtry])
+simulation.create_rods(state_ID = 1, random = [int(run_args.num_cells**3), 2*seed, "box",
+                        "overlap", overlap, "maxtry", maxtry])
 
 # DYNAMICS
 py_lmp.fix("thermostat", "all", "langevin",
            run_args.temp, run_args.temp, run_args.damp, seed)#, "zero yes")
 simulation.set_rod_dynamics("nve")
 
-mc_moves_per_run = 0
 if model.num_states > 1:
-    mc_moves_per_run = int(run_args.mc_moves * simulation.rods_count())
-
-simulation.set_state_transitions(run_args.run_length, mc_moves_per_run, run_args.temp)
-
+    mc_tries = int(run_args.mc_tries * simulation.rods_count())
+    simulation.set_state_transitions(run_args.mc_every, mc_tries)
+    
 concentration = 0 #TODO ??
-
-#TODO simulation.set_state_concentration(concentration, state_ID=0) 
-
-py_lmp.neigh_modify("every 1 delay 1")
+mc_exchange_tries = 10
+#simulation.set_state_concentration(0, concentration, run_args.mc_every, mc_exchange_tries) 
 
 # OUTPUT
 #TODO state change accept rate, rod state ratio, ... (args.silent)
-py_lmp.thermo_style("custom", "step atoms", "pe temp")
 dump_elems = "id x y z type mol"
-py_lmp.dump("dump_cmd", "all", "custom", out_freq, dump_path, dump_elems)
+py_lmp.dump("dump_cmd", "all", "custom", out_freq, '"' + dump_path + '"', dump_elems)
 py_lmp.dump_modify("dump_cmd", "sort id")
+py_lmp.thermo_style("custom", "step atoms", "pe temp",
+                    "v_{}".format(simulation.state_group_vars[1]), # beta rods
+                    "v_{}".format(simulation.state_group_vars[0]), # soluble rods
+                    "f_{}[2]".format(simulation.state_trans_fix), # state change successes
+                    "f_{}[1]".format(simulation.state_trans_fix)) # state change attempts
 py_lmp.thermo(out_freq)
-    
-py_lmp.timestep(run_args.dt)
 
+# RUN
+py_lmp.neigh_modify("every 1 delay 1")    
+py_lmp.timestep(run_args.dt)
 py_lmp.run(args.simlen)

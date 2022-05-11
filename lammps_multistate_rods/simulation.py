@@ -283,11 +283,13 @@ class Simulation(object):
         # create LAMMPS groups and variables for rods (general and each state)
         self.py_lmp.group(Simulation.rods_group, "empty")
         self.py_lmp.variable(Simulation.rods_group_var, "equal",
-                             "count({})".format(Simulation.rods_group))
+                             "count({})/{}".format(Simulation.rods_group,
+                                                   self.model.total_beads))
         for i in range(self.model.num_states):
             self.py_lmp.group(self.state_groups[i], "empty")
             self.py_lmp.variable(self.state_group_vars[i], "equal",
-                                 "count({})".format(self.state_groups[i]))        
+                                 "count({})/{}".format(self.state_groups[i],
+                                                       self.model.total_beads))        
         
     def get_min_rod_type(self):
         return self.type_offset+1
@@ -502,12 +504,12 @@ class Simulation(object):
         '''
         Returns the number of rods in the simulation (via group atom count)
         '''
-        lmp_out = self.py_lmp.lmp_print('"$({})"'.format(Simulation.rods_group_var))
-        return int(lmp_out.strip()) / self.model.total_beads
+        lmp_out = self.py_lmp.lmp_print('"$(v_{})"'.format(Simulation.rods_group_var))
+        return int(lmp_out.strip())
 
     def state_count(self, state_ID):
         '''
         Returns the number of rods of the given state in the simulation (via group atom count)
         '''
-        lmp_out = self.py_lmp.lmp_print('"$({})"'.format(self.state_group_vars[state_ID]))
-        return int(lmp_out.strip()) / self.model.total_beads
+        lmp_out = self.py_lmp.lmp_print('"$(v_{})"'.format(self.state_group_vars[state_ID]))
+        return int(lmp_out.strip())

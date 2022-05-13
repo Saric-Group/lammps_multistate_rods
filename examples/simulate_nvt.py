@@ -111,7 +111,7 @@ simulation.set_rod_dynamics("nve")
 
 if model.num_states > 1:
     mc_tries = int(run_args.mc_tries * simulation.rods_count())
-    simulation.set_state_transitions(run_args.mc_every, mc_tries)
+    simulation.set_state_transitions(run_args.mc_every, mc_tries)#, opt = ["full_energy"])
     
 concentration = 0 #TODO ??
 mc_exchange_tries = 10
@@ -123,8 +123,8 @@ dump_elems = "id x y z type mol"
 py_lmp.dump("dump_cmd", "all", "custom", out_freq, '"' + dump_path + '"', dump_elems)
 py_lmp.dump_modify("dump_cmd", "sort id")
 py_lmp.thermo_style("custom", "step atoms", "pe temp",
-                    "v_{}".format(simulation.state_group_vars[1]), # beta rods
-                    "v_{}".format(simulation.state_group_vars[0]), # soluble rods
+                    " ".join(["v_{}".format(group_var)
+                              for group_var in simulation.state_group_vars]),
                     "f_{}[2]".format(simulation.state_trans_fix), # state change successes
                     "f_{}[1]".format(simulation.state_trans_fix)) # state change attempts
 py_lmp.thermo(out_freq)

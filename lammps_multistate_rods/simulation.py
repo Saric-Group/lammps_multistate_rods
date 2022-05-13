@@ -433,10 +433,10 @@ class Simulation(object):
     
         self.py_lmp.fix(Simulation.state_trans_fix, Simulation.rods_group, "change/state",
                         every, attempts, self.seed, self.temp,
-                        "mols", " ".join([rod_state for rod_state in self.model.rod_states]),
+                        "mols", " ".join([state for state in self.model.rod_states]),
                         "trans_pens", self.trans_file,
+                        "groups", " ".join([group for group in self.state_groups]),
                         fix_opt_args)
-        #TODO remove from old state group, add to new state group !! (fix option)
         
         return Simulation.state_trans_fix
     
@@ -479,6 +479,7 @@ class Simulation(object):
         fix_opt_args = ' '.join(map(str, opt))
         
         mu = None #TODO ... how to get mu from c (pressure & fugacity ??)
+        raise NotImplementedError();
         self.py_lmp.fix(fix_name, self.state_groups[state_ID], "gcmc",
                         every, attempts, 0, 0, self.seed, self.temp, mu, 0, 
                         "mol", self.model.rod_states[state_ID],

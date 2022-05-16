@@ -79,7 +79,7 @@ execfile(args.run_file, {'__builtins__': None}, vars(run_args))
 out_freq = args.output_freq if args.output_freq != None else run_args.mc_every
 
 if args.silent:
-    py_lmp = PyLammps()
+    py_lmp = PyLammps(cmdargs = ['-echo', 'log'])
 else:
     py_lmp = PyLammps(cmdargs = ['-echo', 'both'])
 py_lmp.log('"' + log_path + '"')
@@ -90,7 +90,7 @@ simulation = rods.Simulation(py_lmp, model, run_args.temp, seed, output_folder)
 py_lmp.units("lj")
 py_lmp.dimension(3)
 py_lmp.boundary("p p p")
-py_lmp.lattice("sc", 1/(run_args.cell_size**3))
+py_lmp.lattice("sc", 1 / run_args.cell_size**3)
 py_lmp.region("box", "block", -run_args.num_cells / 2, run_args.num_cells / 2,
                               -run_args.num_cells / 2, run_args.num_cells / 2,
                               -run_args.num_cells / 2, run_args.num_cells / 2)
@@ -101,24 +101,28 @@ overlap = (2.1 * model.rod_radius) / run_args.cell_size
 maxtry = 10
 simulation.create_rods(state_ID = 0, random = [int(run_args.num_cells**3), seed, "box",
                         "overlap", overlap, "maxtry", maxtry])
-simulation.create_rods(state_ID = 1, random = [int(run_args.num_cells**3), 2*seed, "box",
+simulation.create_rods(state_ID = 1, random = [int(run_args.num_cells**3 / 8), 2*seed, "box",
                         "overlap", overlap, "maxtry", maxtry])
 
 # DYNAMICS
 py_lmp.fix("thermostat", "all", "langevin",
            run_args.temp, run_args.temp, run_args.damp, seed)#, "zero yes")
-simulation.set_rod_dynamics("nve")
+# currently fix rigid/small supports only one mol template for later creation of
+# molecules (with e.g. gcmc) so I left it to be defined as optional by hand;
+# if multiple templates would be supported they could all be specified in the
+# "set_rod_dynamics" method automatically...
+simulation.set_rod_dynamics("nve", opt = ["mol", model.rod_states[0]])
 
 if model.num_states > 1:
     mc_tries = int(run_args.mc_tries * simulation.rods_count())
     simulation.set_state_transitions(run_args.mc_every, mc_tries)#, opt = ["full_energy"])
     
-concentration = 0 #TODO ??
+concentration = run_args.conc / run_args.cell_size**3
 mc_exchange_tries = 10
-#simulation.set_state_concentration(0, concentration, run_args.mc_every, mc_exchange_tries) 
+simulation.set_state_concentration(0, concentration, run_args.mc_every, mc_exchange_tries,
+                                   opt = ["overlap_cutoff", overlap]) 
 
 # OUTPUT
-#TODO state change accept rate, rod state ratio, ... (args.silent)
 dump_elems = "id x y z type mol"
 py_lmp.dump("dump_cmd", "all", "custom", out_freq, '"' + dump_path + '"', dump_elems)
 py_lmp.dump_modify("dump_cmd", "sort id")

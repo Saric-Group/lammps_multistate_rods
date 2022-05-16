@@ -451,13 +451,14 @@ class Simulation(object):
         '''
         Sets the "gcmc" fix for the given state to keep concentration approx constant (no
         MC moves, only insertion/deletion of rods(mols) in the given state).
+        It does so using the "pressure" keyword and the relation: P = c*kB*T ...
         It also modifies the "thermo_temp" compute for changing degrees of freedom (dynamic/dof);
         this has to be done manually for all other temperature computes over rod atoms, if they
         exist (for example the internal temperature compute of an "nvt" fix, if used).
         
         state_ID : the ID of the state to fix the concentration of
         
-        concentration : TODO units??
+        concentration : desired concentration (in the units that were set at LAMMPS creation)
         
         every : how often will the fix be called (every that many steps)
         
@@ -478,12 +479,13 @@ class Simulation(object):
         
         fix_opt_args = ' '.join(map(str, opt))
         
-        mu = None #TODO ... how to get mu from c (pressure & fugacity ??)
-        raise NotImplementedError();
+        kB = self.py_lmp.lmp.extract_global("boltz")
+        pressure = concentration * kB * self.temp
         self.py_lmp.fix(fix_name, self.state_groups[state_ID], "gcmc",
-                        every, attempts, 0, 0, self.seed, self.temp, mu, 0, 
+                        every, attempts, 0, 0, self.seed, self.temp, 0, 0, 
                         "mol", self.model.rod_states[state_ID],
                         "rigid", Simulation.rod_dyn_fix,
+                        "pressure", pressure,
                         "group", Simulation.rods_group,
                         fix_opt_args)
         

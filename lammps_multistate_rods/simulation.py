@@ -25,11 +25,9 @@ class Simulation(object):
     This should be done first.
     Afterwards the "create_rods" method should be called, multiple times if necessary, to create
     the initial configuration of the simulation.
-    The "set_rod_dynamics" method sets the dynamics of the rods in LAMMPS, but this can also be
-    done "by hand", outside of the library, without calling this method. It is just a convenience
-    method.
-    All the other methods, including the central one ("state_change_MC") can be called during the
-    simulation as necessary, in between LAMMPS "run" commands.
+    The "set" methods are for setting relevant fixes with relevant and necessary parameters/options
+    for the simulation of rods, and other methods are various convenience methods that might come
+    in handy. All of this, and much more, can be done "by hand" outside of the library methods. 
     '''
     
     rods_group = "rods" # name of LAMMPS group which holds all particles of all the rods
@@ -56,11 +54,19 @@ class Simulation(object):
             raise Exception("py_lmp has to be an instance of lammps.PyLammps!")
         self.py_lmp = py_lmp
         
+        self.mpi_enabled = False
+        self.mpi_rank = 0
+        if py_lmp.lmp.comm != None:
+            self.mpi_enabled = True
+            self.mpi_rank = py_lmp.lmp.comm.Get_rank()
+        
         self.model = model
         self.output_dir = output_dir
-        self.model.generate_mol_files(output_dir)
         self.trans_file = os.path.join(output_dir, 'states.trans')
-        model.generate_trans_file(self.trans_file)
+        # generate files only on the base/single processor
+        if self.mpi_rank == 0:
+            self.model.generate_mol_files(output_dir)
+            model.generate_trans_file(self.trans_file)
             
         # simulation properties (most of which to be set in "setup" and "create_rods")
         self.temp = temperature
@@ -163,8 +169,10 @@ class Simulation(object):
         '''
         This method sets-up all the styles (atom, pair, bond), the simulation box and all the
         data needed to simulate the rods (mass, coeffs, etc.). It is essentially a proxy for the
-        "box_create" LAMMPS command. It also sets up groups: one for all rods (Simulation.rods_group)
-        and one for each rod state (Rod_model.rod_states).
+        "box_create" LAMMPS command.
+        It also sets up groups and variables: one for all rods (rods_group, rods_group_var) and one
+        for each rod state (state_groups, state_group_vars). The variables count the number of rods
+        in each corresponding group.
         
         region_ID : the region ID to use in the "create_box" command
         
@@ -372,6 +380,18 @@ class Simulation(object):
         self.py_lmp.group(self.state_groups[state_ID], "union", self.state_groups[state_ID], "temp_new_rods")
         self.py_lmp.group("temp_new_rods", "clear")
     
+    def rods_count(self):
+        '''
+        Returns the number of rods in the simulation (via rods group atom count)
+        '''
+        return int(self.py_lmp.eval('v_' + Simulation.rods_group_var))
+
+    def state_count(self, state_ID):
+        '''
+        Returns the number of rods of the given state in the simulation (via state group atom count)
+        '''
+        return int(self.py_lmp.eval('v_' + self.state_group_vars[state_ID]))
+    
     def set_rod_dynamics(self, ensemble = "", opt = []):
         '''
         Sets a "rigid/<ensemble>/small" integrator for all the rods (default is just "rigid/small").
@@ -390,6 +410,13 @@ class Simulation(object):
     
         output = self.py_lmp.fix(Simulation.rod_dyn_fix, Simulation.rods_group, fix_type,
                                  "molecule", fix_opt_args)
+        # TODO
+        # currently fix rigid/small supports only one mol template for later creation of
+        # molecules (with e.g. gcmc) so I left it to be defined in "opt" by hand;
+        # if multiple templates would be supported they could all be specified here by
+        # adding something like:
+        # " ".join(["mol "+state for state in self.model.rod_states]),
+        
         try:
             for line in output:
                 if "max distance" in line:
@@ -399,8 +426,9 @@ class Simulation(object):
             self.py_lmp.comm_modify("cutoff", (1+10**-8)*rigid_body_extent)
             # the (1+10^-8) factor is needed because rigid/small outputs "maxextent" to the 8th decimal place
         except:
-            print "WARNING: LAMMPS output to screen probably suppressed; needs to be enabled "\
-                  "in order for 'lammps_multistate_rods' library to function properly"
+            if self.mpi_rank == 0:
+                print "WARNING: LAMMPS output to screen probably suppressed; needs to be enabled "\
+                "in order for 'lammps_multistate_rods' library to function properly"
         
         self.py_lmp.neigh_modify("exclude", "molecule/intra", Simulation.rods_group)
         
@@ -450,8 +478,9 @@ class Simulation(object):
     def set_state_concentration(self, state_ID, concentration, every, attempts, opt = []):
         '''
         Sets the "gcmc" fix for the given state to keep concentration approx constant (no
-        MC moves, only insertion/deletion of rods(mols) in the given state).
-        It does so using the "pressure" keyword and the relation: P = c*kB*T ...
+        MC moves, only insertion/deletion of rods in the given state).
+        It does so using the "pressure" keyword and the relation: P = c*kB*T (ignoring fugacity,
+        which can be taken into account "by hand")
         It also modifies the "thermo_temp" compute for changing degrees of freedom (dynamic/dof);
         this has to be done manually for all other temperature computes over rod atoms, if they
         exist (for example the internal temperature compute of an "nvt" fix, if used).
@@ -499,20 +528,3 @@ class Simulation(object):
         is stored in self.gcmcs[state_ID] for manual manipulation).
         '''
         self.py_lmp.unfix(self.gcmcs[state_ID])
-
-    #####################################################################################
-    ### SIMULATION TOOLS ################################################################
-
-    def rods_count(self):
-        '''
-        Returns the number of rods in the simulation (via rods group atom count)
-        '''
-        lmp_out = self.py_lmp.lmp_print('"$(v_{})"'.format(Simulation.rods_group_var))
-        return int(lmp_out.strip())
-
-    def state_count(self, state_ID):
-        '''
-        Returns the number of rods of the given state in the simulation (via state group atom count)
-        '''
-        lmp_out = self.py_lmp.lmp_print('"$(v_{})"'.format(self.state_group_vars[state_ID]))
-        return int(lmp_out.strip())

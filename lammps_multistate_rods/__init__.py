@@ -6,5 +6,5 @@ Created on 22 Mar 2018
 '''
 
 from rod_model import Rod_model
-from rod import Rod
+from rod_model import Rod_params
 from simulation import Simulation

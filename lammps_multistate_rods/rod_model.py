@@ -14,60 +14,41 @@ import numbers
 vx = 'vx'
 _globcontext = {'__builtins__': None, 'vx': vx} #for eval & exec (to not be able to do funny stuff)
 
-class Params(object):
+class Rod_params(object):
     '''
-    A class only to hold parameters as object variables, for easier/nicer access.
+    A class only to hold parameters as object variables, for easier/nicer/safer access.
     '''
-    def __init__(self, param_dict=None):
+    def __init__(self, param_dict = None):
         if param_dict != None:
             self.__dict__.update(param_dict)
-
-class Rod_model(object):
-    '''
-    This class describes a model for a lammps_multistate_rods simulation, i.e. it holds all
-    the information about the parameters of the rods and the simulation that are parsed from
-    a config file.
-    This class is meant to be instantiated and used by instances of the Simulation and Rods
-    classes of this library. An instance should be available to the user through an instance
-    of the Simulation class.
-    '''
-
-    def __init__(self, config_file_path):
+    
+    def from_file(self, config_file_path):
         '''
-        Parses the config file and sets the parameters given within, and those derived
-        from them, as object attributes.
-        
-        The derived variables/attributes are:
-         - num_patches: the number of patches (NOT including the body)
-         - num_beads: the number of beads in each patch (including the body)
-         - total_beads: the total number of beads in a rod
-         - state_bead_types: the set of types of beads by state
-         - body_bead_types: the set of types of body beads (in all states)
-         - patch_bead_types: the set of types of beads by patch (NOT including the body)
-         - active_bead_types: the set of types of beads that have a non-vx interaction
-         - all_bead_types: the set of all types of beads used in the .cfg file
-         - body_bead_overlap: self-explanatory; calculated from rod_length
-         - bead_radii: a dictionary of bead radii by bead type
-         - transitions: a list by state_ID of lists of (state_ID, penalty) pairs for all allowed transitions
+        Parses a file as simplified Python which contains only assignment (x = y)
+        statements, i.e. it evaluates "y" and assigns it to "x".
+        It manages comments and supports multi-line statements if the last non-comment
+        character in a line is ",".
+        The only statement that is treated specially is the one that starts with
+        'rod_states', it is obligatory as it creates the "state_structures" list as
+        a side-effect.
         '''
-        cfg_params = Params() #for controlled and correct eval & exec
         # ROD PROPERTIES (available to set in the config file)
-        cfg_params.rod_radius = 1.0
-        cfg_params.rod_length = None #default is 8*rod_radius (after rod_radius is (re)defined)
-        cfg_params.rod_mass = 1.0
-        cfg_params.rod_states = None
-        cfg_params.num_states = None #dependent on "rod_states"
-        cfg_params.state_structures = None
-        cfg_params.patch_angles = [] #default for 0 patches
-        cfg_params.patch_bead_radii = [] #default for 0 patches
-        cfg_params.patch_bead_sep = [] #default for 0 patches
-        cfg_params.patch_bulge_out = 0.0 #default (for all patches)
+        self.rod_radius = 1.0
+        self.rod_length = None #default is 8*rod_radius (after rod_radius is (re)defined)
+        self.rod_mass = 1.0
+        self.rod_states = None
+        self.num_states = None #dependent on "rod_states"
+        self.state_structures = None
+        self.patch_angles = [] #default for 0 patches
+        self.patch_bead_radii = [] #default for 0 patches
+        self.patch_bead_sep = [] #default for 0 patches
+        self.patch_bulge_out = 0.0 #default (for all patches)
         # INTERACTION PROPERTIES (available to set in the config file)
-        cfg_params.int_types = None
-        cfg_params.eps = {}
-        cfg_params.trans_penalty = {}
+        self.int_types = None
+        self.eps = {}
+        self.trans_penalty = {}
         
-        with open(config_file_path,'r') as config_file:
+        with open(config_file_path, 'r') as config_file:
             command = ''
             for line in config_file:
                 try:
@@ -85,18 +66,47 @@ class Rod_model(object):
                     assign = parts[0].strip()
                     expr = parts[1].strip()
                     if assign == 'rod_states':
-                        cfg_params.rod_states = eval(expr, _globcontext, vars(cfg_params))
-                        if not isinstance(cfg_params.rod_states, (tuple, list)):
+                        self.rod_states = eval(expr, _globcontext, vars(self))
+                        if not isinstance(self.rod_states, (tuple, list)):
                             raise Exception('"rod_states" has to be either a tuple or a list!')
-                        cfg_params.num_states = len(cfg_params.rod_states)
-                        cfg_params.state_structures = ['']*cfg_params.num_states
+                        self.num_states = len(self.rod_states)
+                        self.state_structures = ['']*self.num_states
                     else: #allow whatever command, support variables to be defined etc.
-                        exec command in _globcontext, vars(cfg_params)
+                        exec command in _globcontext, vars(self)
                 except:
                     raise Exception('Something is wrong with the config file, in command: "'+
                                     command+'"')
                 command = ''
         
+        return self
+
+class Rod_model(object):
+    '''
+    This class describes a model for a lammps_multistate_rods simulation, i.e. it holds all
+    the information about the parameters of the rods and the simulation that are parsed from
+    a config file.
+    This class is meant to be instantiated and used by instances of the Simulation class of
+    this library. An instance should be available to the user through an instance of the
+    Simulation class.
+    '''
+    def __init__(self, cfg_params):
+        '''
+        Sets the parameters from the Rod_params object, and those derived from them,
+        as object attributes.
+        
+        The derived variables/attributes are:
+         - num_patches: the number of patches (NOT including the body)
+         - num_beads: the number of beads in each patch (including the body)
+         - total_beads: the total number of beads in a rod
+         - state_bead_types: the set of types of beads by state
+         - body_bead_types: the set of types of body beads (in all states)
+         - patch_bead_types: the set of types of beads by patch (NOT including the body)
+         - active_bead_types: the set of types of beads that have a non-vx interaction
+         - all_bead_types: the set of all types of beads used in the .cfg file
+         - body_bead_overlap: self-explanatory; calculated from rod_length
+         - bead_radii: a dictionary of bead radii by bead type
+         - transitions: a list by state_ID of lists of (state_ID, penalty) pairs for all allowed transitions
+        '''   
         self.rod_radius = cfg_params.rod_radius
         self.rod_length = cfg_params.rod_length
         if self.rod_length is None:
@@ -245,7 +255,7 @@ class Rod_model(object):
                                "any changes will be OVERWRITTEN)\n\n")
                 mol_file.write("{:d} atoms\n\n".format(self.total_beads))
                 if self.total_beads > 1:
-                    mol_file.write("{:d} bonds\n\n".format(self.total_beads))
+                    mol_file.write("{:d} bonds\n\n".format(self.total_beads-1))
                 
                 mol_file.write("Coords\n\n")
                 n = 1
@@ -273,7 +283,26 @@ class Rod_model(object):
                 
                 if self.total_beads > 1:
                     mol_file.write("\nBonds\n\n")
-                    for i in range(1, self.total_beads):
-                        mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(i, i, i+1))
-                    mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(self.total_beads, self.total_beads, 1))
-    
+                    n = 1
+                    for k in range(len(self.num_beads)):
+                        if k > 0:
+                            mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(n, 1, n+1))
+                            n += 1
+                        for _ in range(self.num_beads[k]-1):
+                            mol_file.write("{:2d} 1 {:2d} {:2d}\n".format(n, n, n+1))
+                            n += 1
+
+    def generate_trans_file(self, filename):
+        '''
+        Generates the file that contains the transition penalties between rod states
+        to be used in the change/state FIX.
+        '''
+        if os.path.exists(filename):
+            print "WARNING: {:s} already exists, won't overwrite it...".format(filename)
+            return
+        with open(filename, "w") as trans_file:                
+            trans_file.write("(AUTO-GENERATED file by the lammps_multistate_rods library, "\
+                             "any changes will be OVERWRITTEN)\n\n")
+            for (from_state, to_state), penalty in self.trans_penalty.iteritems():
+                trans_file.write("{} {} {}\n".format(
+                    self.rod_states[from_state], self.rod_states[to_state], penalty));

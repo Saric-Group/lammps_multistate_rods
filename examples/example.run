@@ -6,8 +6,9 @@ num_cells = 6.0
 
 temp = 1.0
 damp = 0.1
+conc = 1.0 # per cell
 
 dt = 0.01
-run_length = 100
 
-mc_moves = 1.0
+mc_every = 100
+mc_tries = 1.0 # per rod in the simulation (at start)

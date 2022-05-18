@@ -17,7 +17,7 @@ def fibril(model, N, phi, theta, r0, output_path):
     This method outputs a file to "output" with data to create a preformed "fibril",
     i.e. a parallel stack of N rods.
     
-    model : A lammps_multistate_rods.Model clas instance
+    model : A lammps_multistate_rods.Model class instance
     N : number of rods in the "fibril"
     phi : azimuth angle (with respect to y-axis; in deg)
     theta : elevation angle (with respect to x-y plane; in deg)

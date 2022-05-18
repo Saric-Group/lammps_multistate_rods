@@ -7,13 +7,10 @@ Created on 22 Mar 2018
 @author: Eugen Rožić
 '''
 import os
-from math import exp, sqrt, pi
-from random import Random
+from math import sqrt, pi
 
 from lammps import PyLammps
-from ctypes import c_int, c_double, c_void_p
 
-from rod import Rod
 from rod_model import vx
 
 class Simulation(object):
@@ -28,17 +25,18 @@ class Simulation(object):
     This should be done first.
     Afterwards the "create_rods" method should be called, multiple times if necessary, to create
     the initial configuration of the simulation.
-    The "set_rod_dynamics" method sets the dynamics of the rods in LAMMPS, but this can also be
-    done "by hand", outside of the library, without calling this method. It is just a convenience
-    method.
-    All the other methods, including the central one ("state_change_MC") can be called during the
-    simulation as necessary, in between LAMMPS "run" commands.
+    The "set" methods are for setting relevant fixes with relevant and necessary parameters/options
+    for the simulation of rods, and other methods are various convenience methods that might come
+    in handy. All of this, and much more, can be done "by hand" outside of the library methods. 
     '''
     
-    rods_group = "rods" # name of the LAMMPS group which holds all particles of all the rods
-    rod_dyn_fix = "rod_dynamics"
+    rods_group = "rods" # name of LAMMPS group which holds all particles of all the rods
+    rods_group_var = rods_group + "_count" # name of LAMMPS var which counts the rods_group
     
-    def __init__(self, py_lmp, model, seed, output_dir):
+    rod_dyn_fix = "rod_dynamics"
+    state_trans_fix = "state_transitions"
+    
+    def __init__(self, py_lmp, model, temperature, seed, output_dir):
         '''
         Generates the model files and initiates the LAMMPS log.
         
@@ -46,37 +44,42 @@ class Simulation(object):
         
         model : reference to a Model object
         
-        seed : a seed to be used for all random number generators
+        temperature : the temperature of the simulation (for Monte Carlo fixes)
+        
+        seed : a seed to be used for most random number generators
         
         output_dir : where all files that are created (.mol, LAMMPS log, dumps etc.) will be put
         '''       
         if not isinstance(py_lmp, PyLammps):
             raise Exception("py_lmp has to be an instance of lammps.PyLammps!")
         self.py_lmp = py_lmp
-        self.lib_pe_flag = True
-        try:
-            self.py_lmp.lmp.lib.lammps_get_pe.argtypes = [c_void_p, c_int]
-            self.py_lmp.lmp.lib.lammps_get_pe.restype = c_double
-        except:
-            print 'WARNING: LAMMPS library has no "lammps_get_pe" method! Using'\
-                  ' the (much) less efficient "run 0 post no"...'
-            self.lib_pe_flag = False
         
-        self.random = Random(seed)
+        self.mpi_enabled = False
+        self.mpi_rank = 0
+        if py_lmp.lmp.comm != None:
+            self.mpi_enabled = True
+            self.mpi_rank = py_lmp.lmp.comm.Get_rank()
         
         self.model = model
         self.output_dir = output_dir
-        self.model.generate_mol_files(output_dir)
+        self.trans_file = os.path.join(output_dir, 'states.trans')
+        # generate files only on the base/single processor
+        if self.mpi_rank == 0:
+            self.model.generate_mol_files(output_dir)
+            model.generate_trans_file(self.trans_file)
             
         # simulation properties (most of which to be set in "setup" and "create_rods")
+        self.temp = temperature
         self.seed = seed
         self.type_offset = None
-        self._state_types = None
         self.bond_offset = None
         self.pair_styles = None
-        self._rods = []
-        self._nrods = 0
-        self._rod_counters = [0]*model.num_states
+        
+        self.state_groups = [None] * model.num_states
+        self.state_group_vars = [None] * model.num_states
+        for i in range(model.num_states):
+            self.state_groups[i] = "{}_{}".format(model.rod_states[i], Simulation.rods_group)
+            self.state_group_vars[i] = "{}_count".format(self.state_groups[i])
         
     def _set_pair_coeff(self, type_1, type_2, eps, int_type_key, sigma):
         
@@ -134,7 +137,7 @@ class Simulation(object):
         for (type_1, type_2), (eps, int_type) in self.model.eps.iteritems():
             self.set_pair_coeff(type_1, type_2, eps, int_type)
     
-    def deactivate_state(self, state_ID, vx_eps=1.0):
+    def deactivate_state(self, state_ID, vx_eps = 1.0):
         '''
         This method effectively turns the rods in this state into passive solid rods, with regard
         to other rods (the user has to take care of interactions with any other non-rod particles).
@@ -161,14 +164,15 @@ class Simulation(object):
                type_2 in self.model.state_bead_types[state_ID]:
                 self.set_pair_coeff(type_1, type_2, eps, int_type)
             
-    def setup(self, region_ID, atom_style='molecular', type_offset=0,
-              extra_pair_styles=[], overlay=False,
-              bond_offset=0, extra_bond_styles=[],
-              everything_else=[]):
+    def setup(self, region_ID, atom_style = 'molecular', type_offset = 0, extra_pair_styles = [],
+              overlay = False, bond_offset = 0, extra_bond_styles = [], opt = []):
         '''
         This method sets-up all the styles (atom, pair, bond), the simulation box and all the
         data needed to simulate the rods (mass, coeffs, etc.). It is essentially a proxy for the
         "box_create" LAMMPS command.
+        It also sets up groups and variables: one for all rods (rods_group, rods_group_var) and one
+        for each rod state (state_groups, state_group_vars). The variables count the number of rods
+        in each corresponding group.
         
         region_ID : the region ID to use in the "create_box" command
         
@@ -192,14 +196,12 @@ class Simulation(object):
         define them in LAMMPS, e.g. ("harmonic", "fene", ...)
         NOTE: style "zero" is already defined by default
         
-        everything_else : a list containing additional arguments that will be passed verbatim as a single
-        space-separated string to the LAMMPS "box_create" command (e.g. "angle/types", "extra/???/per/atom" etc.)
+        opt : a list containing additional, non-required command parameters that will be passed verbatim
+        as a single space-separated string to the LAMMPS "box_create" command (e.g. "angle/types",
+        "extra/???/per/atom" etc.) 
         '''
         # set instance variables
         self.type_offset = type_offset
-        self._state_types = [ (self.model.total_beads*c_int)(
-            *[ elem + type_offset for patch in state_struct for elem in patch])
-            for state_struct in self.model.state_structures]
         self.bond_offset = bond_offset
         
         # set LAMMPS styles (atom, pair, bond)
@@ -239,7 +241,7 @@ class Simulation(object):
         self.py_lmp.bond_style(self._bond_style_type, 'zero', ' '.join(extra_bond_styles))
         
         # create region_ID (with all the parameters)
-        create_box_args = ' '.join(map(str,everything_else)).split()
+        create_box_args = ' '.join(map(str, opt)).split()
         try:
             ebpa_index = create_box_args.index('extra/bond/per/atom')
         except ValueError:
@@ -286,7 +288,16 @@ class Simulation(object):
         else:
             self.py_lmp.bond_coeff(bond_offset + 1)
         
+        # create LAMMPS groups and variables for rods (general and each state)
         self.py_lmp.group(Simulation.rods_group, "empty")
+        self.py_lmp.variable(Simulation.rods_group_var, "equal",
+                             "count({})/{}".format(Simulation.rods_group,
+                                                   self.model.total_beads))
+        for i in range(self.model.num_states):
+            self.py_lmp.group(self.state_groups[i], "empty")
+            self.py_lmp.variable(self.state_group_vars[i], "equal",
+                                 "count({})/{}".format(self.state_groups[i],
+                                                       self.model.total_beads))        
         
     def get_min_rod_type(self):
         return self.type_offset+1
@@ -294,7 +305,7 @@ class Simulation(object):
     def get_max_rod_type(self):
         return self.type_offset + max(self.model.all_bead_types)
 
-    def create_rods(self, state_ID=0, **kwargs):
+    def create_rods(self, state_ID = 0, **kwargs):
         '''
         This method creates the rods (in the specified state) and associates them with
         appropriate LAMMPS groups.
@@ -322,28 +333,30 @@ class Simulation(object):
             id_offset = max(all_atom_ids)
         else:
             id_offset = 0
+    
+        state_template = self.model.rod_states[state_ID]
         
         if len(kwargs) == 0: #default
             self.py_lmp.create_atoms(0, "box",
-                                     "mol", self.model.rod_states[state_ID], self.seed)
+                                     "mol", state_template, self.seed)
         elif "box" in kwargs.keys():
             params = kwargs['box'] if kwargs['box'] else []
             self.py_lmp.create_atoms(0, "box",
-                                     "mol", self.model.rod_states[state_ID], self.seed,
+                                     "mol", state_template, self.seed,
                                      ' '.join(map(str, params)))
         elif "region" in kwargs.keys():
             params = kwargs['region']
             if len(params) < 1:
                 raise Exception('The "region" option has to come with at least 1 argument (the region ID)!')
             self.py_lmp.create_atoms(0, "region", params[0],
-                                     "mol", self.model.rod_states[state_ID], self.seed,
+                                     "mol", state_template, self.seed,
                                      ' '.join(map(str, params[1:])))
         elif "random" in kwargs.keys():
             params = kwargs['random']
             if len(params) < 3:
                 raise Exception('The "random" option has to come with at least 3 arguments (N, seed and a region ID)!')
             self.py_lmp.create_atoms(0, "random", params[0], params[1], params[2],
-                                     "mol", self.model.rod_states[state_ID], self.seed,
+                                     "mol", state_template, self.seed,
                                      ' '.join(map(str, params[3:])))
         elif "file" in kwargs.keys():
             params = kwargs['file']
@@ -352,142 +365,166 @@ class Simulation(object):
             with open(params[0], 'r') as rods_file:
                 N = int(rods_file.readline().split()[1])
                 rods_file.readline()
-                for i in range(N):
+                for _ in range(N):
                     vals = map(float, rods_file.readline().split())
                     self.py_lmp.create_atoms(0, "single", vals[0], vals[1], vals[2],
-                                             "mol", self.model.rod_states[state_ID], self.seed,
+                                             "mol", state_template, self.seed,
                                              "rotate", vals[3], vals[4], vals[5], vals[6],
                                              "units box", ' '.join(map(str, params[1:])))
         else:
             raise Exception('Unsupported option(s) ({:s}) passed to "create_rods"!'.format(kwargs))
         
-        # create & populate LAMMPS groups
+        # update LAMMPS groups for rods
         self.py_lmp.group("temp_new_rods", "id >", id_offset)
         self.py_lmp.group(Simulation.rods_group, "union", Simulation.rods_group, "temp_new_rods")
+        self.py_lmp.group(self.state_groups[state_ID], "union", self.state_groups[state_ID], "temp_new_rods")
         self.py_lmp.group("temp_new_rods", "clear")
-        
-        # create rods (in Python) + supporting stuff
-        rods_before = self._nrods
-        new_rods = int((self.py_lmp.lmp.get_natoms() - id_offset) / self.model.total_beads)
-        for i in range(new_rods):
-            start_id = id_offset + i*self.model.total_beads + 1
-            rod_bead_ids = range(start_id, start_id + self.model.total_beads)
-            self._rods.append(Rod(self, rods_before + i + 1, rod_bead_ids, state_ID))
-        self._nrods = len(self._rods) # = rods_before + new_rods
-        self._rod_counters[state_ID] += new_rods
     
-    def set_rod_dynamics(self, ensemble = "", everything_else=[]):
+    def rods_count(self):
         '''
-        Sets a "rigid/<ensemble>/small" integrator for all the rods (default is just "rigid/small")
+        Returns the number of rods in the simulation (via rods group atom count)
+        '''
+        return int(self.py_lmp.eval('v_' + Simulation.rods_group_var))
+
+    def state_count(self, state_ID):
+        '''
+        Returns the number of rods of the given state in the simulation (via state group atom count)
+        '''
+        return int(self.py_lmp.eval('v_' + self.state_group_vars[state_ID]))
+    
+    def set_rod_dynamics(self, ensemble = "", opt = []):
+        '''
+        Sets a "rigid/<ensemble>/small" integrator for all the rods (default is just "rigid/small").
+        It also does some comm (ghost) and neighbor (intramolecular exclusion) modifications needed
+        for the simulation to function properly with rods as rigid small molecules.
         
-        everything_else : a list containing additional arguments that will be passed verbatim as a single
-        space-separated string to the LAMMPS "fix" command (e.g. langevin, temp, iso, ...)
+        opt : a list containing additional, non-required fix parameters that will be passed verbatim
+        as a single space-separated string to the LAMMPS "fix" command (e.g. langevin, temp, iso, ...)
+        
+        returns: the fix ID (for convenience; available at Simulation.rod_dyn_fix)
         '''
-        fix_opt_args = ' '.join(map(str,everything_else))
+        fix_opt_args = ' '.join(map(str, opt))
         
         ensemble = ensemble.strip().lower()
-        fix_name = "rigid/"+ensemble+"/small" if ensemble != "" else "rigid/small"
+        fix_type = "rigid/"+ensemble+"/small" if ensemble != "" else "rigid/small"
     
-        self.py_lmp.fix(Simulation.rod_dyn_fix, Simulation.rods_group, fix_name,
-                        "molecule", fix_opt_args) 
+        output = self.py_lmp.fix(Simulation.rod_dyn_fix, Simulation.rods_group, fix_type,
+                                 "molecule", fix_opt_args)
+        # TODO
+        # currently fix rigid/small supports only one mol template for later creation of
+        # molecules (with e.g. gcmc) so I left it to be defined in "opt" by hand;
+        # if multiple templates would be supported they could all be specified here by
+        # adding something like:
+        # " ".join(["mol "+state for state in self.model.rod_states]),
+        
+        try:
+            for line in output:
+                if "max distance" in line:
+                    rigid_body_extent = float(line.split("=")[0])
+                    break
+            # will be ignored if < neighbor cutoff (max pair cutoff + skin) so OK...
+            self.py_lmp.comm_modify("cutoff", (1+10**-8)*rigid_body_extent)
+            # the (1+10^-8) factor is needed because rigid/small outputs "maxextent" to the 8th decimal place
+        except:
+            if self.mpi_rank == 0:
+                print "WARNING: LAMMPS output to screen probably suppressed; needs to be enabled "\
+                "in order for 'lammps_multistate_rods' library to function properly"
+        
         self.py_lmp.neigh_modify("exclude", "molecule/intra", Simulation.rods_group)
+        
+        return Simulation.rod_dyn_fix
     
     def unset_rod_dynamics(self):
         '''
-        Unsets (unfix) the integrator set by "set_rod_dynamics" (the fix ID is stored in
+        Unsets (unfix) the integrator set by the "set_rod_dynamics" method (the fix ID is stored in
         Simulation.rod_dyn_fix for manual manipulation).
         '''
         self.py_lmp.unfix(Simulation.rod_dyn_fix)
-
-    #####################################################################################
-    ### SIMULATION TOOLS ################################################################
-
-    def rods_count(self):
+        
+    def set_state_transitions(self, every, attempts, opt = []):
         '''
-        Returns the overall number of rods in the simulation.
+        Sets the "change/state" fix that does Monte Carlo changing of states of rods.
+        
+        every : how often will the fix be called (every that many steps)
+        
+        attempts : how many MC attempts will be made per call of the fix
+        
+        temperature : the ideal temperature of the simulation (needed for energy penalties which
+        are assumed to be in kT units)
+        
+        opt : a list containing additional, non-required fix parameters that will be passed verbatim
+        as a single space-separated string to the LAMMPS "fix" command (e.g. antisym, full_energy, pe, ...)
+        
+        returns: the fix ID (for convenience; available at Simulation.state_trans_fix)
         '''
-        return self._nrods
-
-    def state_count(self, state_id):
-        '''
-        Returns the number of rods in the state given by ID.
-        '''
-        return self._rod_counters[state_id]
-
-    def get_random_rod(self):
-        '''
-        returns : a randomly picked rod as a lammps_multistate_rods.rod.Rod object
-        '''
-        return self._rods[self.random.randrange(self._nrods)]
-
-    def _try_state_change(self, rod, U_before, T, neigh_flag):
-        '''
-        Tries an MC state change on the given rod. The change is accepted with
-        Boltzmann factor probability at the given temperature (T). 
+        fix_opt_args = ' '.join(map(str, opt))
     
-        WARNING: this method leaves LAMMPS in an inconsistent state regarding
-        thermodynamic variables (i.e. the state of atoms might not correspond
-        with current "pe", because when a move is rejected the energy is not
-        calculated again after restoring old rod state)
+        self.py_lmp.fix(Simulation.state_trans_fix, Simulation.rods_group, "change/state",
+                        every, attempts, self.seed, self.temp,
+                        "mols", " ".join([state for state in self.model.rod_states]),
+                        "trans_pens", self.trans_file,
+                        "groups", " ".join([group for group in self.state_groups]),
+                        fix_opt_args)
+        
+        return Simulation.state_trans_fix
     
-        returns : (1, U_after) or (0, U_before)
+    def unset_state_transitions(self):
         '''
-        old_state = rod.state
-        candidate_states = self.model.transitions[old_state]
-        new_state, penalty = candidate_states[self.random.randrange(0, len(candidate_states))] # certainty a try will be made
-        rod.set_state(new_state)
-        
-        if self.lib_pe_flag:
-            U_after = self.py_lmp.lmp.lib.lammps_get_pe(self.py_lmp.lmp.lmp, neigh_flag)
-        else:
-            self.py_lmp.command('run 0 post no')
-            U_after = self.py_lmp.lmp.extract_compute("thermo_pe", 0, 0)
-        
-        accept_prob = exp((U_before - U_after - penalty) / T)
-        
-        if (accept_prob > 1 or self.random.random() < accept_prob):
-            self._rod_counters[old_state] -= 1
-            self._rod_counters[new_state] += 1
-            return (1, U_after)
-        else:
-            rod.set_state(old_state) # revert change back
-            return (0, U_before)
-
-    def state_change_MC(self, ntries, optimise=None):
+        Unsets (unfix) the "change/state" fix set by the "set_state_transitions" method (the fix ID
+        is stored in Simulation.state_trans_fix for manual manipulation).
         '''
-        Tries to make "ntries" Monte Carlo state changes on randomly selected rods that are
-        presumed to be equilibrated to the simulation temperature.
-        
-        optimise : if None (default) optimisation is used (no neighbour list
-        rebuild) only if the model uses a single LAMMPS pair style, otherwise this
-        optimisation can be forced (True) or ignored (False).
-        NOTE: using optimisation while corresponding beads in different states have
-        a different style of pair interaction MAY, and most probably WILL, lead to
-        wrong energy calculations!
-        
-        returns : the number of accepted moves
-        '''
-        if optimise is True:
-            neigh_flag = 0
-        elif optimise is False:
-            neigh_flag = 1
-        elif optimise is None:
-            if len(self.pair_styles) > 1:
-                neigh_flag = 1
-            else:
-                neigh_flag = 0
-        else:
-            raise TypeError('optimise ({}) can only be None, True or False!'.format(optimise))
-        
-        U_start = U_current = self.py_lmp.lmp.extract_compute("thermo_pe", 0, 0)
-        T_current = self.py_lmp.lmp.extract_compute("thermo_temp", 0, 0)
-        success = 0
-        for _ in range(ntries):
-            rand_rod = self.get_random_rod()
-            (acpt, U_current) = self._try_state_change(rand_rod, U_current, T_current,
-                                                       neigh_flag)
-            success += acpt
+        self.py_lmp.unfix(Simulation.state_trans_fix)
     
-        self.py_lmp.command('print "state_change_MC: {:d}/{:d} (delta_U = {:f})"'.format(
-                            success, ntries, U_start - U_current))
-        return success
+    def set_state_concentration(self, state_ID, concentration, every, attempts, opt = []):
+        '''
+        Sets the "gcmc" fix for the given state to keep concentration approx constant (no
+        MC moves, only insertion/deletion of rods in the given state).
+        It does so using the "pressure" keyword and the relation: P = c*kB*T (ignoring fugacity,
+        which can be taken into account "by hand")
+        It also modifies the "thermo_temp" compute for changing degrees of freedom (dynamic/dof);
+        this has to be done manually for all other temperature computes over rod atoms, if they
+        exist (for example the internal temperature compute of an "nvt" fix, if used).
+        
+        state_ID : the ID of the state to fix the concentration of
+        
+        concentration : desired concentration (in the units that were set at LAMMPS creation)
+        
+        every : how often will the fix be called (every that many steps)
+        
+        attempts : how many MC attempts will be made per call of the fix
+        
+        opt : a list containing additional, non-required fix parameters that will be passed verbatim
+        as a single space-separated string to the LAMMPS "fix" command (e.g. region, full_energy, 
+        overlap_cutoff, group, ...)
+        
+        returns: the fix ID (for convenience; available at self.gcmcs[state_ID])
+        '''
+        fix_name = "gcmc_{}".format(self.model.rod_states[state_ID])
+        
+        if not hasattr(self, 'gcmcs'):
+            self.gcmcs = [None] * self.model.num_states
+        
+        self.gcmcs[state_ID] = fix_name
+        
+        fix_opt_args = ' '.join(map(str, opt))
+        
+        kB = self.py_lmp.lmp.extract_global("boltz")
+        pressure = concentration * kB * self.temp
+        self.py_lmp.fix(fix_name, self.state_groups[state_ID], "gcmc",
+                        every, attempts, 0, 0, self.seed, self.temp, 0, 0, 
+                        "mol", self.model.rod_states[state_ID],
+                        "rigid", Simulation.rod_dyn_fix,
+                        "pressure", pressure,
+                        "group", Simulation.rods_group,
+                        fix_opt_args)
+        
+        self.py_lmp.compute_modify("thermo_temp", "dynamic/dof", "yes")
+        
+        return fix_name
+    
+    def unset_state_concentration(self, state_ID):
+        '''
+        Unsets (unfix) the "gcmc" fix set by the "set_state_concentration" method (the fix ID
+        is stored in self.gcmcs[state_ID] for manual manipulation).
+        '''
+        self.py_lmp.unfix(self.gcmcs[state_ID])

@@ -9,6 +9,10 @@ Created on 16 Mar 2018
 
 @author: Eugen Rožić
 '''
+from mpi4py import MPI
+
+mpi_comm = MPI.COMM_WORLD
+mpi_rank = mpi_comm.Get_rank()
 
 import os
 import argparse
@@ -45,9 +49,12 @@ if not args.run_file.endswith('.run'):
     raise Exception('Run configuration file (second arg) has to end with ".run"!')
 
 if args.seed is None:
-    import time
-    seed = int((time.time() % 1)*1000000)
-    print "WARNING: no seed given explicitly; using:", seed
+    seed = 0
+    if mpi_rank == 0:
+        import time
+        seed = int((time.time() % 1)*1000000)
+        print "WARNING: no seed given explicitly; using:", seed
+    seed = mpi_comm.bcast(seed, root = 0)
 else:
     seed = args.seed
 
@@ -64,6 +71,7 @@ import lammps_multistate_rods as rods
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
 
+# PROCESS RUN AND SIMULATION PARAMETERS
 run_filename = os.path.splitext(os.path.basename(args.run_file))[0]
 sim_ID = '{:s}_{:d}'.format(run_filename, seed)
     
@@ -73,63 +81,75 @@ dump_path = os.path.join(output_folder, dump_filename)
 log_filename = '{:d}.lammps'.format(seed)
 log_path = os.path.join(output_folder, log_filename)
 
-run_args = rods.rod_model.Params()
-execfile(args.run_file, {'__builtins__': None}, vars(run_args))
+run_args = rods.Rod_params() # any object with __dict__ would do
+if (mpi_rank == 0):
+    execfile(args.run_file, {'__builtins__': None}, vars(run_args))
+run_args = mpi_comm.bcast(run_args, root = 0)
 
-out_freq = args.output_freq if args.output_freq != None else run_args.run_length
+out_freq = args.output_freq if args.output_freq != None else run_args.mc_every
 
-py_lmp = PyLammps(cmdargs=['-screen','none'])
-py_lmp.log('"'+log_path+'"')
-model = rods.Rod_model(args.cfg_file)
-simulation = rods.Simulation(py_lmp, model, seed, output_folder)
+if args.silent:
+    py_lmp = PyLammps(cmdargs = ['-echo', 'log'], comm = mpi_comm)
+else:
+    py_lmp = PyLammps(cmdargs = ['-echo', 'both'], comm = mpi_comm)
+py_lmp.log('"' + log_path + '"')
 
+rod_params = rods.Rod_params()
+if (mpi_rank == 0):
+    rod_params.from_file(args.cfg_file);
+rod_params = mpi_comm.bcast(rod_params, root = 0)
+
+# CREATE BASE OBJECTS
+model = rods.Rod_model(rod_params)
+simulation = rods.Simulation(py_lmp, model, run_args.temp, seed, output_folder)
+
+# LAMMPS SETUP AND PARTICLE CREATION
 py_lmp.units("lj")
 py_lmp.dimension(3)
 py_lmp.boundary("p p p")
-py_lmp.lattice("sc", 1/(run_args.cell_size**3))
+py_lmp.lattice("sc", 1 / run_args.cell_size**3)
 py_lmp.region("box", "block", -run_args.num_cells / 2, run_args.num_cells / 2,
                               -run_args.num_cells / 2, run_args.num_cells / 2,
                               -run_args.num_cells / 2, run_args.num_cells / 2)
 simulation.setup("box")
-simulation.create_rods()
+#simulation.create_rods() #same as "box = None"
+# Sensible example for random creation:
+overlap = (2.1 * model.rod_radius) / run_args.cell_size
+maxtry = 10
+simulation.create_rods(state_ID = 0, random = [int(run_args.num_cells**3), seed, "box",
+                        "overlap", overlap, "maxtry", maxtry])
+simulation.create_rods(state_ID = 1, random = [int(run_args.num_cells**3 / 8), 2*seed, "box",
+                        "overlap", overlap, "maxtry", maxtry])
 
-# DYNAMICS
+# ROD DYNAMICS AND FIXES
 py_lmp.fix("thermostat", "all", "langevin",
            run_args.temp, run_args.temp, run_args.damp, seed)#, "zero yes")
-simulation.set_rod_dynamics("nve")
 
-py_lmp.neigh_modify("every 1 delay 1")
+simulation.set_rod_dynamics("nve", opt = ["mol", model.rod_states[0]])
+
+mc_tries = int(run_args.mc_tries * simulation.rods_count())
+if model.num_states > 1:
+    simulation.set_state_transitions(run_args.mc_every, mc_tries)#, opt = ["full_energy"])
+    
+concentration = run_args.conc / run_args.cell_size**3
+mc_exchange_tries = int(0.01 * mc_tries + 1)
+simulation.set_state_concentration(0, concentration, run_args.mc_every, mc_exchange_tries,
+                                   opt = ["overlap_cutoff", overlap]) 
 
 # OUTPUT
-py_lmp.thermo_style("custom", "step atoms", "pe temp")
 dump_elems = "id x y z type mol"
-py_lmp.dump("dump_cmd", "all", "custom", out_freq, dump_path, dump_elems)
+py_lmp.dump("dump_cmd", "all", "custom", out_freq, '"' + dump_path + '"', dump_elems)
 py_lmp.dump_modify("dump_cmd", "sort id")
+py_lmp.thermo_style("custom", "step atoms", "pe temp",
+                    " ".join(["v_{}".format(group_var)
+                              for group_var in simulation.state_group_vars]),
+                    "f_{}[2]".format(simulation.state_trans_fix), # state change successes
+                    "f_{}[1]".format(simulation.state_trans_fix)) # state change attempts
 py_lmp.thermo(out_freq)
 
-# RUN...
-mc_moves_per_run = 0
-if model.num_states > 1:
-    mc_moves_per_run = int(run_args.mc_moves * simulation.rods_count())
-    
+# RUN
+py_lmp.neigh_modify("every 1 delay 1")    
 py_lmp.timestep(run_args.dt)
+py_lmp.run(args.simlen)
 
-if mc_moves_per_run == 0:
-    py_lmp.command('run {:d}'.format(args.simlen))
-else:
-    py_lmp.command('run {:d} post no'.format(run_args.run_length-1)) #so output happens after state changes
-    remaining = args.simlen - run_args.run_length + 1
-    for i in range(args.simlen / run_args.run_length):
-        success = simulation.state_change_MC(mc_moves_per_run)
-        if not args.silent:
-            base_count = simulation.state_count(0)
-            beta_count = simulation.state_count(1)
-            print 'step {:d} / {:d} :  beta-to-soluble ratio = {:d}/{:d} = {:.5f} (accept rate = {:.5f})'.format(
-                    (i+1)*run_args.run_length, args.simlen, beta_count, base_count, 
-                    float(beta_count)/base_count, float(success)/mc_moves_per_run)
-        
-        if remaining / run_args.run_length > 0:
-            py_lmp.command('run {:d} post no'.format(run_args.run_length))
-            remaining -= run_args.run_length
-        else:
-            py_lmp.command('run {:d} post no'.format(remaining))
+MPI.Finalize()

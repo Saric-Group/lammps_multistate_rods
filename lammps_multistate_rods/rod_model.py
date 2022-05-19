@@ -16,7 +16,8 @@ _globcontext = {'__builtins__': None, 'vx': vx} #for eval & exec (to not be able
 
 class Rod_params(object):
     '''
-    A class only to hold parameters as object variables, for easier/nicer/safer access.
+    A class only to hold parameters as object variables, for easier/nicer/safer access, and
+    for parsing rod configuration files.
     '''
     def __init__(self, param_dict = None):
         if param_dict != None:

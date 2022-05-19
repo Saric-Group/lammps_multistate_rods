@@ -1,4 +1,3 @@
-
-imgs
-
-*.tex
+.project
+/user_manual.synctex.gz
+/tmp/

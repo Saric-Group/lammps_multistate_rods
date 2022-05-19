@@ -1,4 +1,3 @@
-
-*.out
-*.aux
-*.dvi
+.project
+/user_manual.synctex.gz
+/tmp/

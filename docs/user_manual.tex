@@ -81,7 +81,7 @@ in the system, have to be given explicitly to LAMMPS in the program/input script
 
 The configuration file has the syntax of a Python file that is restricted to one-line commands, with an
 exception of lines ending with a comma. The file is interpreted one line at a time in a protected environment
-in the process of creation of a \texttt{Rod\_model} instance.
+in the process of creation of a \texttt{Rod\_params} instance.
 Some variables have special meaning as parameters of the model and their values will be kept in the
 \texttt{Rod\_model} instance, others can be defined for auxiliary purposes in the configuration file itself
 and will be discarded after a \texttt{Rod\_model} instance has been created.
@@ -92,10 +92,10 @@ An example of a configuration file with all possible parameters explicitly set c
 
 \vspace{1em}
 
-Through the library each rod is implemented as a rigid body that has a body, consisted of body beads, and
-zero or more \textbf{patches}. A ``patch'' is a number of \textbf{interaction sites} (particles) in a line
-along the rod axis that share some properties. There are no intra-rod interactions, i.e. interactions between
-particles/beads/interaction sites of the same rod are set to 0.
+Through the library each rod is implemented as a small, rigid molecule that has a body, consisted of body
+beads, and zero or more \textbf{patches}. A ``patch'' is a number of \textbf{interaction sites}
+(particles) in a line parallel to the rod axis that share some properties. There are no intra-rod
+interactions, i.e. interactions between particles/beads/interaction sites of the same rod are set to 0.
 All of the geometrical parameters at the user's disposal are depicted and described in figures
 \ref{img:rod_front} and \ref{img:rod_side}.
 
@@ -141,44 +141,79 @@ Some of the features and restrictions of the model are:
 
 \subsection{Running a simulation}
 
-This library is written in Python 2.7 and uses the Python wrapper of the LAMMPS library interface to
-communicate with the LAMMPS program. In order to use it the user first has to make a Python script that
-imports the \texttt{lammps} module and create an instance of \texttt{Lammps} (or \texttt{PyLammps})
-which they will afterwards use in essentially the same way as in a standard textual input script.
-Secondly, the user has to construct a \texttt{Rod\_model} object using the model configuration file they
-previously defined. This object holds all data from the configuration file and a lot of additional,
+This library is written in Python 2.7 and uses the Python wrapper of the LAMMPS library interface
+(\texttt{PyLammps}) to communicate with the LAMMPS program. In order to use it the user first has to make
+a Python script that imports the \texttt{lammps} module and create an instance of \texttt{PyLammps} which
+they will afterwards use in essentially the same way as in a standard textual input script.
+
+Secondly, the user has to construct a \texttt{Rod\_model} object using a \texttt{Rod\_params}
+instance which was previously instantiated and used to parse the model configuration file.
+This \texttt{Rod\_model} object holds all data from the configuration file and a lot of additional,
 inferred ones that instances of the \texttt{Simulation} class use, but can also come in handy to the
-user. These two objects (a \texttt{Lammps} and a \texttt{Rod\_model} instance) can then be used to make
-a \texttt{Simulation} object.
+user. These two objects (a \texttt{PyLammps} and a \texttt{Rod\_model} instance) can then be used to
+instantiate a \texttt{Simulation} object.
 
 \vspace{1em}
 
 The idea of the library is for it to be used to create and manipulate the (states of the) rods as
-independently as possible of any other particles or features in LAMMPS. To this end a
-\texttt{Simulation} object needs to be instantiated and \texttt{setup} with some information about all
-the other LAMMPS elements (particles, interactions, etc.) that are or will be used in the simulation.
-After that the object's methods (e.g. \texttt{create\_rods}, \texttt{set\_rod\_dynamics},
-\texttt{state\_change\_MC}) can be used to create rods, set their dynamics and manipulate their states.
-In the meanwhile LAMMPS can be used normally (through Python) to manipulate in any which way any other
-particles or properties of the system.
+independently as possible of any other particles or features in LAMMPS. To this end the
+\texttt{Simulation} class offers various convenience methods for setting up and querying the LAMMPS
+simulation, creating the rods and (un)setting fixes that define the behavior of the rods.
+
+All other elements and features of the simulation (not related to the rod objects) can be created and
+set independently of the library using the \texttt{PyLammps} object, as one would normally do in a
+LAMMPS (Python) input script.
+
+\vspace{1em}
+
+After a \texttt{Simulation} object is created and some basic properties of the simulation (e.g. units,
+dimensions, boundaries etc.) set, the \texttt{setup} method should be called with some information about
+all the other non-rod LAMMPS elements (particles, interactions, etc.) that are or will be used in the
+simulation. This way the library takes care of everything else for the user and it is ensured no
+conflicts between the rod and non-rod aspects of the simulation arise.
+
+Next the rods can be created in various (documented) ways with the \texttt{create\_rods} method, but also
+the \emph{gcmc} fix of the \texttt{set\_state\_concentration} can be used for such a purpose too.
+
+The library offers methods to set up 3 main types of behaviors of rods through LAMMPS fixes, and those
+are:
+\begin{enumerate}
+	\item \texttt{set\_rod\_dynamics} - sets the dynamics of ALL the rods through a \emph{rigid/small} fix
+	of a given ensemble (if the user wants different dynamics for different groups of rods they will have to
+	do it ``by hand'', but the contents of this method can be a good guide);
+	
+	\item \texttt{set\_state\_transitions} - sets up the change-of-state MC moves through a
+	\emph{change/state} fix\footnote{This is a fix developed by me and can be found in my personal fork of
+	LAMMPS, it is not yet available in the official LAMMPS, but it probably will be in the near future}
+	using the information from the rod model (allowed transitions and corresponding penalties) 
+	
+	\item \texttt{set\_state\_concentration} - sets up a \emph{gcmc} fix (only for insert/delete moves) to
+	keep (approximately) constant concentration of rods of a given state in the simulation (currently
+	available only for one state because of the limitations of the \emph{rigid} fixes)
+\end{enumerate}
+
+The user can also define additional behaviors relating to the rod objects outside of using
+the methods of the library / \texttt{Simulation} object, but should be very careful with that and
+familiarise themselves beforehand with the inner workings of the (relatively well documented) library
+classes.
 
 \vspace{1em}
 
 A demonstration of all of this and an example of how the library can be used can be found in the
-\texttt{examples} directory in the form of a console application (simulate\_nvt.py).
+\texttt{examples} directory in the form of a console application (\texttt{simulate\_nvt.py}).
 
 \subsubsection*{Technical limitations and development points}
 
 \begin{enumerate}
-	\item It is impossible to delete rods after they are created \label{enum:1};
-	\item Consequently to \ref{enum:1}., a grand-canonical ensemble cannot be established (\texttt{fix
-	gcmc} can't be used) for any of the rod states. However, a near-constant density of rods in a certain
-	state might be achieved by simply adding new rods in that state (if that state gets depleted during the
-	simulation);
-	\item Currently MPI functionality is not available, a simulation with rods can only be run on a single
-	core (this is probably fixable without major changes to the library);
 	\item Energy minimization algorithms from LAMMPS cannot be used on the rods because they are defined as
-	rigid objects. This makes random initial configurations hard to generate.
+	rigid objects. However, random initial configurations can be generated in multiple other ways:
+	\begin{itemize}
+		\item using the \emph{random} option of the \texttt{create\_rods} method (advisably with the
+		\emph{overlap} and \emph{maxtry} keywords)
+		
+		\item using the \emph{gcmc} fix of the \texttt{set\_state\_concentration} method in an initial
+		``equilibration'' run with state-changing disabled, etc.
+	\end{itemize}
 \end{enumerate}
 
 \end{document}

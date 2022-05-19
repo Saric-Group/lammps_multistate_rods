@@ -1,8 +1,13 @@
 # The *LAMMPS multistate rods* library
 
-This is a Python library for running LAMMPS hybrid MD-MC simulations of rigid, rod-like structures that can exist in multiple (internal) states that can change during a simulation. The molecular dynamics (MD) part of the simulations are the moving around of the rods/particles/atoms due to forces/interactions, and the Monte Carlo (MC) part is the changing of the internal states of the rods and keeping (approximately) constant the concentrations of rods of a given state (if desired).
+This is a Python library for running hybrid MD-MC simulations in LAMMPS of rigid, rod-like structures that can change between multiple (internal) states during a simulation. It was developed for (very) coarse-grained modeling of proteins with multiple functionally different conformations (but hopefully can find other applications).
 
-In essence, it is a collection of convenient classes and methods that provide for fast and easy building of such (coarse-grained, rod-like, multi-state) models, for simplified making of LAMMPS (Python) simulation scripts to be run with such models, and for the post-processing of simulation results.
+The molecular dynamics (MD) part of the simulations is the moving around of the rods/particles/atoms due to forces/interactions, and the Monte Carlo (MC) part is the changing of the internal states of the rods and keeping (approximately) constant concentrations of rods of a given state (if desired).
+
+In essence the library is (just) a collection of convenient classes and methods that provide for:
+1. fast and easy building of such (coarse-grained, rod-like, multi-state) models,
+2. for simplified making of LAMMPS (Python) simulation scripts to be run with such models, and
+3. for (limited, but extendable) post-processing of simulation results.
 
 ## Overview and contents
 

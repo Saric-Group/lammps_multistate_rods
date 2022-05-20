@@ -8,7 +8,7 @@ temp = 1.0
 damp = 0.1
 conc = 1.0 # per cell
 
-dt = 0.01
-
 mc_every = 100
 mc_tries = 1.0 # per rod in the simulation (at start)
+
+dt = 0.01

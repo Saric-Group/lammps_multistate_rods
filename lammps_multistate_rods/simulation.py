@@ -242,22 +242,23 @@ class Simulation(object):
         
         # create region_ID (with all the parameters)
         create_box_args = ' '.join(map(str, opt)).split()
+        max_bonds = self.model.num_patches + 1
         try:
             ebpa_index = create_box_args.index('extra/bond/per/atom')
         except ValueError:
-            create_box_args.extend(['extra/bond/per/atom', '2'])
+            create_box_args.extend(['extra/bond/per/atom', str(max_bonds)])
         else:
-            ebpa = int(create_box_args[ebpa_index+1])
-            if ebpa < 2:
-                create_box_args[ebpa_index+1] = '2'
+            ebpa = int(create_box_args[ebpa_index + 1])
+            if ebpa < max_bonds:
+                create_box_args[ebpa_index + 1] = str(max_bonds)
         try:
             espa_index = create_box_args.index('extra/special/per/atom')
         except ValueError:
-            create_box_args.extend(['extra/special/per/atom', '6'])
+            create_box_args.extend(['extra/special/per/atom', str(3 * max_bonds)])
         else:
-            espa = int(create_box_args[espa_index+1])
-            if espa < 6:
-                create_box_args[espa_index+1] = '6'
+            espa = int(create_box_args[espa_index + 1])
+            if espa < 3 * max_bonds:
+                create_box_args[espa_index + 1] = str(3 * max_bonds)
         
         self.py_lmp.create_box(type_offset + max(self.model.all_bead_types), region_ID,
                                "bond/types", 1 + bond_offset, ' '.join(create_box_args))
@@ -528,3 +529,4 @@ class Simulation(object):
         is stored in self.gcmcs[state_ID] for manual manipulation).
         '''
         self.py_lmp.unfix(self.gcmcs[state_ID])
+        # will fail if previously not "set" because gcmcs won't exist - but that is OK, it should fail

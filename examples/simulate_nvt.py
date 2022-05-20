@@ -68,7 +68,7 @@ else:
 from lammps import PyLammps
 import lammps_multistate_rods as rods
 
-if not os.path.exists(output_folder):
+if not os.path.exists(output_folder) and mpi_rank == 0:
     os.makedirs(output_folder)
 
 # PROCESS RUN AND SIMULATION PARAMETERS

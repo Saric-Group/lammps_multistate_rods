@@ -86,7 +86,8 @@ def fibril(model, N, phi, theta, r0, data = None, out_path = None):
             if loc[i][j] < mins[j]:
                 mins[j] = loc[i][j]
         
-        rod_data = (loc[0], loc[1], loc[2], rot[0], rot[1][0], rot[1][1], rot[1][2])
+        rod_data = (loc[i][0], loc[i][1], loc[i][2], rot[i][0],
+                    rot[i][1][0], rot[i][1][1], rot[i][1][2])
         if data != None:
             data.append(rod_data)
         if out_file != None:

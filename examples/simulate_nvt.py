@@ -134,7 +134,7 @@ if model.num_states > 1:
 concentration = run_args.conc / run_args.cell_size**3
 mc_exchange_tries = int(0.01 * mc_tries + 1)
 simulation.set_state_concentration(0, concentration, run_args.mc_every, mc_exchange_tries,
-                                   opt = ["overlap_cutoff", overlap]) 
+                                   opt = ["overlap_cutoff", overlap])
 
 # OUTPUT
 dump_elems = "id x y z type mol"

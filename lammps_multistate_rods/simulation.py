@@ -317,14 +317,11 @@ class Simulation(object):
             box = (...) (DEFAULT) - creates them on a defined lattice
             region = (<region_ID>, ...) - creates them on a defined lattice only in the specified region
             random = (N, seed, <region_ID>, ...) - creates them on random locations in the specified region
-            file = (<file_path>, ...) - creates them on locations and with rotations specified in the file;
-            the file has to have the following format:
-                monomers: N
-                <empty line>
-                <x> <y> <z> <angle> <Rx> <Ry> <Rz>
-                ...(N-1 more lines like above)...
-            where the <angle> should be in radians, and the Rs are components of a unit vector about
-            which to rotate, and whose origin is at the insertion point.
+            exact = (per-rod-list, ...) - creates them on locations and with rotations specified in a per-rod-list;
+                each element of the list has to be a 7-tuple with the following contents:
+                    (x, y, z, theta, Rx, Ry, Rz)
+                where theta is the angle of rotation (in radians) around a unit vector given by (Rx, Ry, Rz),
+                and (x,y,z) is the insertion point.
         
         The "..." stands for extra parameters that will be passed to "create_atoms" verbatim as a single
         space-separated string.
@@ -359,19 +356,15 @@ class Simulation(object):
             self.py_lmp.create_atoms(0, "random", params[0], params[1], params[2],
                                      "mol", state_template, self.seed,
                                      ' '.join(map(str, params[3:])))
-        elif "file" in kwargs.keys():
-            params = kwargs['file']
+        elif "exact" in kwargs.keys():
+            params = kwargs['exact']
             if len(params) < 1:
-                raise Exception('The "file" option has to come with at least 1 argument (the file path)!')
-            with open(params[0], 'r') as rods_file:
-                N = int(rods_file.readline().split()[1])
-                rods_file.readline()
-                for _ in range(N):
-                    vals = map(float, rods_file.readline().split())
-                    self.py_lmp.create_atoms(0, "single", vals[0], vals[1], vals[2],
-                                             "mol", state_template, self.seed,
-                                             "rotate", vals[3], vals[4], vals[5], vals[6],
-                                             "units box", ' '.join(map(str, params[1:])))
+                raise Exception('The "exact" option has to come with at least 1 argument (a per-rod-list)!')
+            for vals in params[0]:
+                self.py_lmp.create_atoms(0, "single", vals[0], vals[1], vals[2],
+                                         "mol", state_template, self.seed,
+                                         "rotate", vals[3], vals[4], vals[5], vals[6],
+                                         "units box", ' '.join(map(str, params[1:])))
         else:
             raise Exception('Unsupported option(s) ({:s}) passed to "create_rods"!'.format(kwargs))
         

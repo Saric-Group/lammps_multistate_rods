@@ -11,7 +11,7 @@ from math import sqrt, pi
 
 from lammps import PyLammps
 
-from rod_model import vx
+from .rod_model import vx
 
 class Simulation(object):
     '''
@@ -421,8 +421,8 @@ class Simulation(object):
             # the (1+10^-8) factor is needed because rigid/small outputs "maxextent" to the 8th decimal place
         except:
             if self.mpi_rank == 0:
-                print "WARNING: LAMMPS output to screen probably suppressed; needs to be enabled "\
-                "in order for 'lammps_multistate_rods' library to function properly"
+                print("WARNING: LAMMPS output to screen probably suppressed; needs to be enabled "\
+                "in order for 'lammps_multistate_rods' library to function properly")
         
         self.py_lmp.neigh_modify("exclude", "molecule/intra", Simulation.rods_group)
         
@@ -513,6 +513,8 @@ class Simulation(object):
                         fix_opt_args)
         
         self.py_lmp.compute_modify("thermo_temp", "dynamic/dof", "yes")
+        #TODO if rod dynamics is nvt or npt (has own thermo compute) then a fix_modify
+        # is necessary also...
         
         return fix_name
     

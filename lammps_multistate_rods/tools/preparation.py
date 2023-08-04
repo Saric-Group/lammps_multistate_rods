@@ -9,9 +9,9 @@ Created on 8 Jan 2019
 @author: Eugen Rožić
 '''
 import numpy as np
-import pyquaternion
+from pyquaternion import Quaternion
 
-def fibril(model, N, phi, theta, r0, data = None, out_path = None):
+def prepare_fibril(model, N, phi, theta, r0, data = None, out_path = None):
     '''
     This method generates locations and orientations of rods in a fibril that has the given
     length and global location and orientation.
@@ -47,12 +47,12 @@ def fibril(model, N, phi, theta, r0, data = None, out_path = None):
         raise Exception("Center of the fibril has to be a 3-vector!")
 
     rod_radius = model.rod_radius
-    R_z = pyquaternion.Quaternion(axis=[0,0,1], degrees=phi)
-    R_x = pyquaternion.Quaternion(axis=[1,0,0], degrees=theta)
+    R_z = Quaternion(axis=[0,0,1], degrees=phi)
+    R_x = Quaternion(axis=[1,0,0], degrees=theta)
     if theta > 0:
-        R_x_inv = pyquaternion.Quaternion(axis=[1,0,0], degrees=theta-180)
+        R_x_inv = Quaternion(axis=[1,0,0], degrees=theta-180)
     else:
-        R_x_inv = pyquaternion.Quaternion(axis=[1,0,0], degrees=theta+180)
+        R_x_inv = Quaternion(axis=[1,0,0], degrees=theta+180)
 
     # correct composite rotation is to first rotate around z then around x', which is equivalent to
     # rotations first around x then around z for the same angles
@@ -99,7 +99,7 @@ def fibril(model, N, phi, theta, r0, data = None, out_path = None):
     
     return zip(mins, maxs)
 
-def single(r0, phi, theta, out_path = None):
+def prepare_single(r0, phi, theta, out_path = None):
     '''
     This method generates the location and orientation of a single rod (for LAMMPS).
     The generated data is a 7-tuple of the following format:
@@ -120,8 +120,8 @@ def single(r0, phi, theta, out_path = None):
     else:
         raise Exception('Center of the rod has to be a 3-vector!')
         
-    R_z = pyquaternion.Quaternion(axis = [0,0,1], degrees = phi)
-    R_x = pyquaternion.Quaternion(axis = [1,0,0], degrees = theta)
+    R_z = Quaternion(axis = [0,0,1], degrees = phi)
+    R_x = Quaternion(axis = [1,0,0], degrees = theta)
     R_tot = R_z * R_x
     rot = R_tot.get_axis(undefined = [0.0, 0.0, 1.0])
     

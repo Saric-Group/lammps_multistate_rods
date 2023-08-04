@@ -318,11 +318,11 @@ def draw_rod_rod_r_slice(vals, vals_min, fig_title = ''):
 
 def calculate_point_rod(bead_type, rod_state):
     
-    vals = np.array([md.point_rod(bead_type, rod_state, r, z, psi1)
+    vals = np.array([md.bead_rod_interaction(bead_type, rod_state, r, z, psi1)
                               for psi1 in thetas for r in rs for z in zs])
     vals = vals.reshape(theta_points, r_points, z_points)
     vals_min = vals.min()
-    print "min val = {}".format(vals_min)
+    print("min val = {}".format(vals_min))
     
     return vals, vals_min
     
@@ -339,11 +339,11 @@ def calculate_rod_rod(rod1_state, rod2_state, theta = 0, phi = 0, psi2 = None):
         psi2s = phis
         psi2_points = phi_points
     
-    vals = np.array([md.rod_rod(rod1_state, rod2_state, r, z, theta, phi, psi1, psi2)
+    vals = np.array([md.rod_rod_interaction(rod1_state, rod2_state, r, z, theta, phi, psi1, psi2)
                               for psi2 in psi2s for psi1 in thetas for r in rs for z in zs])
     vals = vals.reshape(psi2_points, theta_points, r_points, z_points)
     vals_min = vals.min()
-    print "min val = {}".format(vals_min)
+    print("min val = {}".format(vals_min))
     
     return vals, vals_min
 
@@ -372,12 +372,12 @@ parser.add_argument('--da', type=float, default=30,
 args = parser.parse_args()
 
 if __name__ != '__main__':
-    print "(visualise.py) ERROR: This module should only be called as a stand-alone application!"
+    print("(visualise.py) ERROR: This module should only be called as a stand-alone application!")
     quit()
 
 cfg_filename = args.config_file
 model = Rod_model(cfg_filename)
-md.setup(model)
+md.model_setup(model)
 
 # plot parameters and grid points
 dx = args.dx*model.rod_radius
@@ -407,57 +407,57 @@ widget_color = 'lightgoldenrodyellow'
 
 # interactive console - choice of interaction
 while True:
-    print
-    int_type = raw_input("Enter '1' for point-rod or '2' for rod-rod interaction: ")
+    print()
+    int_type = input("Enter '1' for point-rod or '2' for rod-rod interaction: ")
     int_type = int_type.strip()
     if int_type == '1':
         while True:
-            bead_type = raw_input("Enter type of bead at (z,r): ")
+            bead_type = input("Enter type of bead at (z,r): ")
             try:
                 bead_type = int(bead_type)
                 if bead_type not in model.all_bead_types:
                     raise Exception("")
                 break
             except:
-                print "Unexpected input ({:}), please enter one of the following: ".format(bead_type),
-                print model.all_bead_types
+                print("Unexpected input ({:}), please enter one of the following: ".format(bead_type), end='')
+                print(model.all_bead_types)
         for i in range(model.num_states):
-                print "{:2d} : {:s}".format(i, model.rod_states[i])
+                print("{:2d} : {:s}".format(i, model.rod_states[i]))
         while True:
-            rod_state = raw_input("Enter state ID of rod at (0,0): ")
+            rod_state = input("Enter state ID of rod at (0,0): ")
             try:
                 rod_state = int(rod_state)
                 if rod_state < 0 or rod_state >= model.num_states:
                     raise Exception("")
                 break
             except:
-                print "Unexpected input ({:}), please try again...".format(rod_state)
-        print "Calculating..."
+                print("Unexpected input ({:}), please try again...".format(rod_state))
+        print("Calculating...")
         vals, vals_min = calculate_point_rod(bead_type, rod_state)
         break
     elif int_type == '2':
         for i in range(model.num_states):
-            print "{:2d} : {:s}".format(i, model.rod_states[i])
+            print("{:2d} : {:s}".format(i, model.rod_states[i]))
         while True:
-            rod1_state = raw_input("Enter state ID of rod at (0,0): ")
+            rod1_state = input("Enter state ID of rod at (0,0): ")
             try:
                 rod1_state = int(rod1_state)
                 if rod1_state < 0 or rod1_state >= model.num_states:
                     raise Exception("")
                 break
             except:
-                print "Unexpected input ({:}), please try again...".format(rod1_state)
+                print("Unexpected input ({:}), please try again...".format(rod1_state))
         while True:
-            rod2_state = raw_input("Enter state ID of rod at (z,r): ")
+            rod2_state = input("Enter state ID of rod at (z,r): ")
             try:
                 rod2_state = int(rod2_state)
                 if rod2_state < 0 or rod2_state >= model.num_states:
                     raise Exception("")
                 break
             except:
-                print "Unexpected input ({:}), please try again...".format(rod2_state)
+                print("Unexpected input ({:}), please try again...".format(rod2_state))
         while True:
-            theta = raw_input("Enter angle from z axis (theta; in deg) of rod at (z,r): ")
+            theta = input("Enter angle from z axis (theta; in deg) of rod at (z,r): ")
             if theta.strip() == '':
                 theta = 0
                 break
@@ -466,9 +466,9 @@ while True:
                     theta = np.deg2rad(float(theta))
                     break
                 except:
-                    print "Unexpected input ({:}), please try again...".format(theta)
+                    print("Unexpected input ({:}), please try again...".format(theta))
         while True:
-            phi = raw_input("Enter angle around z axis (phi; in deg) of rod at (z,r): ")
+            phi = input("Enter angle around z axis (phi; in deg) of rod at (z,r): ")
             if phi.strip() == '':
                 phi = 0
                 break
@@ -477,9 +477,9 @@ while True:
                     phi = np.deg2rad(float(phi))
                     break
                 except:
-                    print "Unexpected input ({:}), please try again...".format(phi)
+                    print("Unexpected input ({:}), please try again...".format(phi))
         while True:
-            psi2 = raw_input("Enter internal rotation (psi2; in deg) of rod at (z,r): ")
+            psi2 = input("Enter internal rotation (psi2; in deg) of rod at (z,r): ")
             if psi2.strip() == '':
                 psi2 = None
                 break
@@ -488,21 +488,21 @@ while True:
                     psi2 = np.deg2rad(float(psi2))
                     break
                 except:
-                    print "Unexpected input ({:}), please try again...".format(psi2)
-        print "Calculating..."
+                    print("Unexpected input ({:}), please try again...".format(psi2))
+        print("Calculating...")
         vals, vals_min = calculate_rod_rod(rod1_state, rod2_state, theta, phi, psi2)
         break
     else:
-        print "Unexpected input ({:s}), please try again...".format(int_type)
+        print("Unexpected input ({:s}), please try again...".format(int_type))
 
 # interactive console - choice of plot
 while True:
-    print
-    print "1 : 2D plot"
-    print "2 : z-slice plot"
-    print "3 : r-slice plot"
-    print "q : Quit"
-    plot_type = raw_input("What to plot? (enter 1, 2 or 3) ")
+    print("""
+1 : 2D plot
+2 : z-slice plot
+3 : r-slice plot
+q : Quit""")
+    plot_type = input("What to plot? (enter 1, 2 or 3) ")
     plot_type = plot_type.strip()
     if plot_type == '1':
         if int_type == '1':
@@ -543,6 +543,6 @@ while True:
     elif plot_type.lower() == 'q':
         quit()
     else:
-        print "Unexpected input ({:s}), please try again...".format(plot_type)
+        print("Unexpected input ({:s}), please try again...".format(plot_type))
         continue
     plt.show()

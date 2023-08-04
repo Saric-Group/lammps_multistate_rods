@@ -8,7 +8,11 @@ Created on 12 Apr 2018
 @author: Eugen Rožić
 '''
 
-import potentials
+from .potentials import lj_n_m
+from .potentials import cos_sq
+from .potentials import morse
+from .potentials import gauss
+
 import numpy as np
 
 model = None
@@ -27,22 +31,22 @@ beta_active = None
 
 interactions = {}
 
-def int_f(int_type, R, eps):
+def interaction_function(int_type, R, eps):
     if int_type[0] == 'lj/cut':
-        return lambda r: potentials.lj_n_m(12, 6, r, R, R + int_type[1], eps)
+        return lambda r: lj_n_m(12, 6, r, R, R + int_type[1], eps)
     elif int_type[0] == 'cosine/squared':
-        return lambda r: potentials.cos_sq(r, R, R + int_type[1], eps,
+        return lambda r: cos_sq(r, R, R + int_type[1], eps,
                                            True if len(int_type)==3 else False)
     elif int_type[0] == 'nm/cut':
-        return lambda r: potentials.lj_n_m(int_type[1], int_type[2], r, R, R + int_type[3], eps)
+        return lambda r: lj_n_m(int_type[1], int_type[2], r, R, R + int_type[3], eps)
     elif int_type[0] == 'morse':
-        return lambda r: potentials.morse(int_type[1], r, R, R + int_type[2], eps)
+        return lambda r: morse(int_type[1], r, R, R + int_type[2], eps)
     elif int_type[0] == 'gauss/cut':
-        return lambda r: potentials.gauss(int_type[1], r, R, R + int_type[2], eps)
+        return lambda r: gauss(int_type[1], r, R, R + int_type[2], eps)
     else:
         raise Exception('Unknown/invalid int_type parameter: '+ str(int_type))
 
-def setup(rod_model):
+def model_setup(rod_model):
     '''
     rod_model : a lammps_multistate_rods.Model instance
     '''
@@ -79,10 +83,10 @@ def setup(rod_model):
         r1 = radius_from_type(type1)
         r2 = radius_from_type(type2)
         interactions[(type1, type2)] = interactions[(type2, type1)] = \
-            int_f(model.int_types[int_type_key], r1+r2, eps)
+            interaction_function(model.int_types[int_type_key], r1+r2, eps)
 
 
-def point_rod(point_bead_type, rod_state, r, z, phi):
+def bead_rod_interaction(point_bead_type, rod_state, r, z, phi):
     '''
     Interaction between a rod in the given state centered at (0,0) and extending along
     the z-axis and a bead of the given type centered at (r,z).
@@ -111,7 +115,7 @@ def point_rod(point_bead_type, rod_state, r, z, phi):
                 return 0.0 #instant break if volume exclusion overlap
     return U
 
-def rod_rod(rod1_state, rod2_state, r, z, theta, phi, psi1, psi2):
+def rod_rod_interaction(rod1_state, rod2_state, r, z, theta, phi, psi1, psi2):
     '''
     Interaction between two rods in the given states. The first rod is at (0,0) with internal
     rotation of psi1, and the other is at (z,r) with orientation (theta, phi) and internal

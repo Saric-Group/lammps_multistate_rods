@@ -61,14 +61,15 @@ def parse_dump_file(dump_file_path):
                     yield (timestep, box_bounds, data_structure, data)
                     i = 0
             else:
-                #print i,
+                #print(i, end=' ')
                 pass
 
-def write_dump_snapshot((timestep, box_bounds, data_structure, data), output_path, append=False):
+def write_dump_snapshot(dump_snapshot, output_path, append=False):
     '''
     Writes the single snapshot data to the given filepath in the proper LAMMPS dump format
     (i.e. inverse of "parse_dump_file").
     '''
+    (timestep, box_bounds, data_structure, data) = dump_snapshot
     mode = 'a' if append else 'w'
     with open(output_path, mode) as out_file:
         out_file.write('ITEM: TIMESTEP\n')

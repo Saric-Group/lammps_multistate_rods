@@ -116,9 +116,9 @@ class Rod_model(object):
         self.rod_states = cfg_params.rod_states
         self.num_states = cfg_params.num_states
         try:
-            self.state_structures = map(lambda y: map(lambda x: map(int, x.split('-')),
-                                                      y.split('|')),
-                                        cfg_params.state_structures)
+            self.state_structures = [[list(map(int, patch.split('-')))
+                                      for patch in state_structure.split('|')]
+                                      for state_structure in cfg_params.state_structures]
         except:
             raise Exception('The "state_structures" have to contain only integers \
                              separated by "|" or "-".')
@@ -157,11 +157,12 @@ class Rod_model(object):
         self.bead_radii = {}
         for n in range(self.num_states):
             state_struct = self.state_structures[n]
+            num_beads = [len(patch) for patch in state_struct]
             #check all have the same "form"            
             if self.num_beads == None:
-                self.num_beads = map(len, state_struct)
+                self.num_beads = num_beads
                 self.num_patches = len(self.num_beads) - 1
-            elif map(len, state_struct) != self.num_beads:
+            if num_beads != self.num_beads:
                 raise Exception('All states must have the same number of patches and beads in each patch!')
             
             if self.patch_bead_types == None:
@@ -214,7 +215,7 @@ class Rod_model(object):
         self.active_bead_types = set()
         eps_temp = self.eps; self.eps = {}
         # rectify "eps"'s keys (type_1 < type_2)
-        for bead_types, eps_val in eps_temp.iteritems():
+        for bead_types, eps_val in eps_temp.items():
             if eps_val[1] != vx:
                 self.active_bead_types.update(bead_types)
             if bead_types[0] <= bead_types[1]:
@@ -231,7 +232,7 @@ class Rod_model(object):
     
         antisym_completion = {}
         self.transitions = [[] for _ in range(self.num_states)]
-        for (from_state, to_state), value in self.trans_penalty.iteritems():
+        for (from_state, to_state), value in self.trans_penalty.items():
             self.transitions[from_state].append((to_state, value))
             if self.trans_penalty.get((to_state, from_state)) == None:
                 antisym_completion[(to_state, from_state)] = -value
@@ -304,6 +305,6 @@ class Rod_model(object):
         with open(filename, "w") as trans_file:                
             trans_file.write("(AUTO-GENERATED file by the lammps_multistate_rods library, "\
                              "any changes will be OVERWRITTEN)\n\n")
-            for (from_state, to_state), penalty in self.trans_penalty.iteritems():
+            for (from_state, to_state), penalty in self.trans_penalty.items():
                 trans_file.write("{} {} {}\n".format(
                     self.rod_states[from_state], self.rod_states[to_state], penalty));

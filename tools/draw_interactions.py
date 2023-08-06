@@ -419,8 +419,8 @@ while True:
                     raise Exception("")
                 break
             except:
-                print("Unexpected input ({:}), please enter one of the following: ".format(bead_type), end='')
-                print(model.all_bead_types)
+                print("Unexpected input ({:}), please enter one of the following: ".format(bead_type),
+                      model.all_bead_types)
         for i in range(model.num_states):
                 print("{:2d} : {:s}".format(i, model.rod_states[i]))
         while True:

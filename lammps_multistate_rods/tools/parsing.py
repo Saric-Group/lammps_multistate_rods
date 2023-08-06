@@ -81,5 +81,5 @@ def write_dump_snapshot(dump_snapshot, output_path, append=False):
             out_file.write('{:f} {:f}\n'.format(*dimension))
         out_file.write('ITEM: ATOMS {:s}\n'.format(' '.join(data_structure)))
         for line_vars in data:
-            line_parts = map(lambda key: str(line_vars[key]), data_structure)
+            line_parts = [str(line_vars[key]) for key in data_structure]
             out_file.write('{:s}\n'.format(' '.join(line_parts)))

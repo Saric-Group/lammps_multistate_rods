@@ -79,7 +79,7 @@ def model_setup(rod_model):
                 if bead_type in model.patch_bead_types[i]:
                     return model.patch_bead_radii[i]
     
-    for (type1, type2), (eps, int_type_key) in model.eps.iteritems():
+    for (type1, type2), (eps, int_type_key) in model.eps.items():
         r1 = radius_from_type(type1)
         r2 = radius_from_type(type2)
         interactions[(type1, type2)] = interactions[(type2, type1)] = \

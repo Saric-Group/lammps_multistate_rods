@@ -134,7 +134,7 @@ class Simulation(object):
         This method sets all the pair coefficients as they are given in the config file (in the 
         "eps" dictionary).
         '''
-        for (type_1, type_2), (eps, int_type) in self.model.eps.iteritems():
+        for (type_1, type_2), (eps, int_type) in self.model.eps.items():
             self.set_pair_coeff(type_1, type_2, eps, int_type)
     
     def deactivate_state(self, state_ID, vx_eps = 1.0):
@@ -159,7 +159,7 @@ class Simulation(object):
         This method sets the interactions of the bead types of the specified state to the ones given in
         the configuration file (e.g. according to the contents of the "eps" matrix/dictionary).
         '''
-        for (type_1, type_2), (eps, int_type) in self.model.eps.iteritems():
+        for (type_1, type_2), (eps, int_type) in self.model.eps.items():
             if type_1 in self.model.state_bead_types[state_ID] or\
                type_2 in self.model.state_bead_types[state_ID]:
                 self.set_pair_coeff(type_1, type_2, eps, int_type)

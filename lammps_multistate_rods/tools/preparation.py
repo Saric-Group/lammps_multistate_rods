@@ -97,7 +97,7 @@ def prepare_fibril(model, N, phi, theta, r0, data = None, out_path = None):
         out_file.write('\n')
         out_file.close()
     
-    return zip(mins, maxs)
+    return list(zip(mins, maxs))
 
 def prepare_single(r0, phi, theta, out_path = None):
     '''

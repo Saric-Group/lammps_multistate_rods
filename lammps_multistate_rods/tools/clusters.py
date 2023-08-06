@@ -52,7 +52,7 @@ def get_cluster_data(raw_data, compute_ID, every, model, type_offset):
         if (count-1) % every != 0:
             continue
         timesteps.append(timestep)
-        box_sizes.append(map(lambda x: x[1]-x[0], box_bounds))
+        box_sizes.append([x[1]-x[0] for x in box_bounds])
         snapshot_data = {}
         current_mol_id = None
         current_cluster_id = None
@@ -138,7 +138,7 @@ def composition_by_states(cluster_data):
     i = 0
     for snapshot_data in cluster_data:
         ret_data = {}
-        for cluster_ID, cluster in snapshot_data.iteritems():
+        for cluster_ID, cluster in snapshot_data.items():
             cluster_composition = {}
             for elem in cluster:
                 if elem[1] in cluster_composition:
@@ -163,7 +163,7 @@ def trajectories(cluster_data, rod_states=[1]):
     data_by_cluster_ID = {}
     i = 0
     for snapshot_data in cluster_data:
-        for cluster_ID, cluster in snapshot_data.iteritems():
+        for cluster_ID, cluster in snapshot_data.items():
             #FIX this might be inefficient, at start there are all, later fewer... ?
             if not cluster_ID in data_by_cluster_ID:
                 data_by_cluster_ID[cluster_ID] = [0]*i

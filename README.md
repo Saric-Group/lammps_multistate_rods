@@ -11,7 +11,7 @@ In essence the library is (just) a collection of convenient classes and methods 
 
 ## Overview and contents
 
-This library is written in Python 2.7 and uses LAMMPS's Python library interface (`PyLammps`) to communicate with an instance of LAMMPS. It is fully compatible with MPI, meaning applications that use it (like the `simulate_nvt.py` in the *examples* directory) can be run with `mpiexec`.
+This library is written in Python and uses LAMMPS's Python library interface (`PyLammps`) to communicate with an instance of LAMMPS. It is fully compatible with MPI, meaning applications that use it (like the `simulate_nvt.py` in the *examples* directory) can be run with `mpiexec`.
 
 The library is contained within the **lammps_multistate_rods** directory and is consisted of 2 main classes: `Rod_model` and `Simulation`, along with some other potentially useful tools (methods etc.) in the **tools** subdirectory.
 
@@ -32,15 +32,15 @@ The **docs** directory contains documents describing library features and how to
 
 In order to use this library one must simply download it and enable Python to find it. This can be done in a number of ways, some of which are:
 1. add the path of the *lammps_multistate_rods* directory (the one that contains the class module files) to the `PYTHONPATH` environment variable (this has to be done every time for a new environment, which can be automated);
-2. simply copy/put the *lammps_multistate_rods* directory in the local search path of your Python, for example in `~/.local/lib/python2.7/site-packages` (this has to be done every time you want a new version, which can also be automated, but is dirty);
-3. make a symbolic link to the *lammps_multistate_rods* directory in the local search path of you Python, for example `ln -s <download_dir>/lammps_multistate_rods/ ~/.local/lib/python2.7/site-packages/lammps_multistate_rods`
+2. simply copy/put the *lammps_multistate_rods* directory in the local search path of your Python, for example in `~/.local/lib/python3.10/site-packages` (this has to be done every time you want a new version, which can also be automated, but is dirty);
+3. make a symbolic link to the *lammps_multistate_rods* directory in the local search path of you Python, for example `ln -s <download_dir>/lammps_multistate_rods/ ~/.local/lib/python3.10/site-packages/lammps_multistate_rods`
 
 In a related repository of mine (https://github.com/Saric-Group/amyloid-simulations) this library is used and there is a *setup_scripts* directory that might be very useful to check out. It contains scripts that setup everything (virtualenv and LAMMPS) and get the most current library. In that project I use the first of the methods listed above, that can be checked in any of the *job templates* in the same-named directory.
 
 ### Requirements
 
 The requirements for using the library are:
-1. **Python 2.7** with *numpy* and *pyquaternion*:
+1. **Python 3** (min 3.5, it's **NOT Python2 compatible**) with *numpy* and *pyquaternion*:
     ```
     pip install numpy pyquaternion
     ```
@@ -67,4 +67,4 @@ Major drawbacks of that version and approach are:
 2. can't run on multiple processors with MPI, only serial on a single machine (making it even slower)
 3. couldn't change the total number of rods during simulation, i.e. couldn't keep constant concentration of any species
 
-On the other hand, it uses only the "official" LAMMPS features, no need to download and build from my fork of the LAMMPS project. I'm not keeping it very updated though...
+On the other hand, it uses only the "official" LAMMPS features, no need to download and build from my fork of the LAMMPS project. I'm not keeping it very updated though (ran on Python2.7)...

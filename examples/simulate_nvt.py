@@ -116,12 +116,13 @@ py_lmp.region("box", "block", -run_args.num_cells / 2, run_args.num_cells / 2,
 simulation.setup("box")
 #simulation.create_rods() #same as "box = None"
 # Sensible example for random creation:
-overlap = (2.1 * model.rod_radius) / run_args.cell_size
+overlap = 2.1*model.rod_radius
+lattice_overlap = overlap / run_args.cell_size
 maxtry = 10
 simulation.create_rods(state_ID = 0, random = [int(run_args.num_cells**3), seed, "box",
-                        "overlap", overlap, "maxtry", maxtry])
+                        "overlap", lattice_overlap, "maxtry", maxtry])
 simulation.create_rods(state_ID = 1, random = [int(run_args.num_cells**3 / 8), 2*seed, "box",
-                        "overlap", overlap, "maxtry", maxtry])
+                        "overlap", lattice_overlap, "maxtry", maxtry])
 
 # ROD DYNAMICS AND FIXES
 py_lmp.fix("thermostat", "all", "langevin",
@@ -131,7 +132,7 @@ simulation.set_rod_dynamics("nve", opt = ["mol", model.rod_states[0]])
 
 mc_tries = int(run_args.mc_tries * simulation.rods_count())
 if model.num_states > 1:
-    simulation.set_state_transitions(run_args.mc_every, mc_tries)#, opt = ["full_energy"])
+    simulation.set_state_transitions(run_args.mc_every, mc_tries, opt = ['auto_skin'])#, opt = ["full_energy"])
     
 concentration = run_args.conc / run_args.cell_size**3
 mc_exchange_tries = int(0.01 * mc_tries + 1)

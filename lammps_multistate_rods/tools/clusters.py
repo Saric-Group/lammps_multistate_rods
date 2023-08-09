@@ -53,41 +53,50 @@ def get_cluster_data(raw_data, compute_ID, every, model, type_offset):
             continue
         timesteps.append(timestep)
         box_sizes.append([x[1]-x[0] for x in box_bounds])
-        snapshot_data = {}
-        current_mol_id = None
-        current_cluster_id = None
-        current_rod = []
+        cluster_ids = {} # key is a mol_id, value is a set of cluster ids
+        snapshot_data = {} # key is the smallest mol_id, value is a list of (mol_id, rod_state) tuples
+        current_mol_id = 0
+        current_cluster_ids = None
+        current_rod = None
         for line_vars in data:
             mol_id = int(line_vars['mol'])
             if mol_id == 0:
                 continue #just skip non-molecule particles...
             cluster_id = int(line_vars['c_'+compute_ID])
-            if current_mol_id is None:
-                current_mol_id = mol_id
-            elif mol_id != current_mol_id:
-                if current_cluster_id > 0:
+            if mol_id != current_mol_id:
+                if current_cluster_ids:
                     current_rod_state = state_types_to_id(current_rod)
-                    if current_cluster_id in snapshot_data:
-                        snapshot_data[current_cluster_id].append((current_mol_id, current_rod_state))
+                    smallest_mol_id = None
+                    for key, value in cluster_ids.items():
+                        if value.intersection(current_cluster_ids):
+                            smallest_mol_id = key
+                            break # no need to check for multiples (shouldn't be possible)
+                    if smallest_mol_id:
+                        cluster_ids[smallest_mol_id].update(current_cluster_ids)
+                        snapshot_data[smallest_mol_id].append((current_mol_id, current_rod_state))
                     else:
-                        snapshot_data[current_cluster_id] = [(current_mol_id, current_rod_state)]
+                        cluster_ids[current_mol_id] = current_cluster_ids
+                        snapshot_data[current_mol_id] = [(current_mol_id, current_rod_state)]
                 current_mol_id = mol_id
-                current_cluster_id = 0
+                current_cluster_ids = set()
                 current_rod = []
             current_rod.append(int(line_vars['type']))
-            if cluster_id > current_cluster_id:
-                current_cluster_id = cluster_id
-        if current_cluster_id > 0:
-            current_rod_state = state_types_to_id(current_rod)
-            if current_cluster_id in snapshot_data:
-                snapshot_data[current_cluster_id].append((current_mol_id, current_rod_state))
+            if cluster_id > 0:
+                current_cluster_ids.add(cluster_id)
+        if current_cluster_ids:
+            smallest_mol_id = None
+            for key, value in cluster_ids.items():
+                if value.intersection(current_cluster_ids):
+                    smallest_mol_id = key
+                    break # no need to check for multiples (shouldn't be possible)
+            if smallest_mol_id:
+                cluster_ids[smallest_mol_id].update(current_cluster_ids)
+                snapshot_data[smallest_mol_id].append((current_mol_id, current_rod_state))
             else:
-                snapshot_data[current_cluster_id] = [(current_mol_id, current_rod_state)]
-        #switch keys to correspond to lowest mol_id in each cluster
-        new_snapshot_data = {}
-        for value in snapshot_data.values():
-            new_snapshot_data[value[0][0]] = value
-        cluster_data.append(new_snapshot_data)
+                cluster_ids[current_mol_id] = current_cluster_ids
+                snapshot_data[current_mol_id] = [(current_mol_id, current_rod_state)]
+        
+        cluster_data.append(snapshot_data)
     
     return timesteps, box_sizes, cluster_data
 

@@ -10,11 +10,12 @@ Created on 30 Nov 2018
 
 import numpy as np
 
-from lammps_multistate_rods import Rod_model
+from lammps_multistate_rods import Rod_model, Rod_params
 import lammps_multistate_rods.tools.interactions as md
 
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
+from matplotlib import colormaps
 
 def draw_models(axes = None, r = 0, z = 0, phi = 0, old = []):
     
@@ -83,9 +84,9 @@ def draw_point_rod_z_slice(vals, vals_min, fig_title = ''):
     
     lines = []
     for i in range(theta_points):
-        lines.append(ax_r.plot(rs, vals[i].T[zero_z], 'r-', lw=1.0,
-                               label=r'$\phi = {:1.1f}^\circ$'.format(np.rad2deg(thetas[i])),
-                               color = plot_cmap((i+1.0)/(theta_points+1))))
+        lines.append(ax_r.plot(rs, vals[i].T[zero_z],
+                               color = plot_cmap((i+1.0)/(theta_points+1)), linestyle='-', lw=1.0,
+                               label=r'$\phi = {:1.1f}^\circ$'.format(np.rad2deg(thetas[i]))))
     ax_r.axvline(2.0*model.rod_radius, color='black', linestyle='-', lw=1.0)
     ax_r.axvline(3.0*model.rod_radius, color='black', linestyle='--', lw=0.5)
     ax_r.grid()
@@ -119,9 +120,9 @@ def draw_point_rod_r_slice(vals, vals_min, fig_title = ''):
     r_init = int((model.rod_radius*2 - rmin)/dx)
     lines = []
     for i in range(theta_points):
-        lines.append(ax_z.plot(zs, vals[i][r_init], 'r-', lw=1.0,
-                               label=r'$\phi = {:1.1f}^\circ$'.format(np.rad2deg(thetas[i])),
-                               color = plot_cmap((i+1.0)/(theta_points+1))))
+        lines.append(ax_z.plot(zs, vals[i][r_init],
+                               color = plot_cmap((i+1.0)/(theta_points+1)), linestyle='-', lw=1.0,
+                               label=r'$\phi = {:1.1f}^\circ$'.format(np.rad2deg(thetas[i]))))
     ax_z.axvline(-3.0*model.rod_radius, color='black', linestyle='--', lw=1.0)
     ax_z.axvline(3.0*model.rod_radius, color='black', linestyle='--', lw=1.0)
     ax_z.grid()
@@ -213,9 +214,9 @@ def draw_rod_rod_z_slice(vals, vals_min, fig_title = ''):
         psi2_init = 0
     lines = []
     for i in range(theta_points):
-        lines.append(ax_r.plot(rs, vals[psi2_init][i].T[zero_z], 'r-', lw=1.0,
-                               label=r'$\psi_1 = {:1.1f}^\circ$'.format(np.rad2deg(thetas[i])),
-                                   color = plot_cmap((i+1.0)/(theta_points+1))))
+        lines.append(ax_r.plot(rs, vals[psi2_init][i].T[zero_z],
+                               color = plot_cmap((i+1.0)/(theta_points+1)), linestyle='-', lw=1.0,
+                               label=r'$\psi_1 = {:1.1f}^\circ$'.format(np.rad2deg(thetas[i]))))
     ax_r.axvline(2.0*model.rod_radius, color='black', linestyle='-', lw=1.0)
     ax_r.axvline(3.0*model.rod_radius, color='black', linestyle='--', lw=0.5)
     ax_r.grid()
@@ -269,9 +270,9 @@ def draw_rod_rod_r_slice(vals, vals_min, fig_title = ''):
     r_init = int((model.rod_radius*2 - rmin)/dx)
     lines = []
     for i in range(theta_points):
-        lines.append(ax_z.plot(zs, vals[psi2_init][i][r_init], 'r-', lw=1.0,
-                               label=r'$\psi_1 = {:1.1f}^\circ$'.format(np.rad2deg(thetas[i])),
-                                   color = plot_cmap((i+1.0)/(theta_points+1))))
+        lines.append(ax_z.plot(zs, vals[psi2_init][i][r_init],
+                               color = plot_cmap((i+1.0)/(theta_points+1)), linestyle='-', lw=1.0,
+                               label=r'$\psi_1 = {:1.1f}^\circ$'.format(np.rad2deg(thetas[i]))))
     ax_z.axvline(-3.0*model.rod_radius, color='black', linestyle='--', lw=1.0)
     ax_z.axvline(3.0*model.rod_radius, color='black', linestyle='--', lw=1.0)
     ax_z.grid()
@@ -376,7 +377,9 @@ if __name__ != '__main__':
     quit()
 
 cfg_filename = args.config_file
-model = Rod_model(cfg_filename)
+rod_params = Rod_params()
+rod_params.from_file(cfg_filename);
+model = Rod_model(rod_params)
 md.model_setup(model)
 
 # plot parameters and grid points
@@ -401,8 +404,8 @@ thetas = np.linspace(thetamin, thetamax, theta_points)
 
 # figure parameters
 axis_font = {'size':13}
-img_cmap = plt.get_cmap("RdBu")
-plot_cmap = plt.cm.get_cmap('nipy_spectral')
+img_cmap = colormaps['RdBu']
+plot_cmap = colormaps['nipy_spectral']
 widget_color = 'lightgoldenrodyellow'
 
 # interactive console - choice of interaction

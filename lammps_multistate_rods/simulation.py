@@ -271,7 +271,7 @@ class Simulation(object):
         
         # create region_ID (with all the parameters)
         create_box_args = ' '.join(map(str, opt)).split()
-        max_bonds = self.model.num_patches + 1
+        max_bonds = self.model.num_patches + 1 if self.model.num_patches > 0 else 2 
         try:
             ebpa_index = create_box_args.index('extra/bond/per/atom')
         except ValueError:

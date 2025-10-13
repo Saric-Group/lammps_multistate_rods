@@ -7,7 +7,7 @@ Created on 17 Jul 2018
 @author: Eugen Rožić
 '''
 
-import os
+import os, sys
 from math import cos, sin, pi
 import numbers
 
@@ -188,7 +188,8 @@ class Rod_model(object):
         
         self.total_beads = sum(self.num_beads)
         if self.total_beads == 1:
-            print("WARNING: The rods contain only one bead in total - no bonds will be defined and the rigid fix won't work!")
+            print("WARNING: The rods contain only one bead in total - no bonds will be defined and "\
+                  "the rigid fix won't work!", file=sys.stderr)
             
         if self.num_beads[0] > 1:
             self.body_bead_overlap = ((2*self.rod_radius*self.num_beads[0] - self.rod_length) /
@@ -227,7 +228,7 @@ class Rod_model(object):
         try:
             self.int_types[vx]
         except KeyError:
-            print('WARNING: No "'+vx+'" interaction defined in the config file! Using "lj/cut" default...')
+            print('WARNING: No "'+vx+'" interaction defined in the config file! Using "lj/cut" default...', file=sys.stderr)
             self.int_types[vx] = ('lj/cut', 0.0)
     
         antisym_completion = {}
@@ -250,7 +251,7 @@ class Rod_model(object):
         for state in range(self.num_states):
             output_path = os.path.join(model_output_dir, self.rod_states[state]+'.mol')
             if os.path.exists(output_path):
-                print("WARNING: {:s} already exists, won't overwrite it...".format(output_path))
+                print("WARNING: {:s} already exists, won't overwrite it...".format(output_path), file=sys.stderr)
                 continue
             with open(output_path, "w") as mol_file:
                 mol_file.write("(AUTO-GENERATED file by the lammps_multistate_rods library, "\
@@ -300,7 +301,7 @@ class Rod_model(object):
         to be used in the change/state FIX.
         '''
         if os.path.exists(filename):
-            print("WARNING: {:s} already exists, won't overwrite it...".format(filename))
+            print("WARNING: {:s} already exists, won't overwrite it...".format(filename), file=sys.stderr)
             return
         with open(filename, "w") as trans_file:                
             trans_file.write("(AUTO-GENERATED file by the lammps_multistate_rods library, "\

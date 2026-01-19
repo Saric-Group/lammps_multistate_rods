@@ -22,10 +22,11 @@ def get_cluster_data(raw_data, compute_ID, every, model, type_offset):
     
     type_offset : the type offset for the rod model in the simulation that generated the dump file
     
-    returns : a triplet of a list of timesteps, a list of box dimensions and a corresponding list of
-    snapshot_data, where "snapshot_data" is a dictionary by cluster ID's whose values are lists of
-    (rod/mol ID, rod state ID) pairs. If rod state ID is "None" the molecule is not a rod from the
-    given model.
+    returns : a quadruplet of a list of timesteps, a list of box dimensions (for each timestep), a list
+    of rod counts by rod state ID (for each timestep), and a corresponding list of snapshot_data, where
+    "snapshot_data" is a dictionary by cluster ID's whose values are lists of (rod/mol ID, rod state ID)
+    pairs.
+    If "rod state ID" is "None" the molecule is not a rod from the given model.
     
     NOTE: cluster ID's are set to the lowest rod/mol ID of each cluster, not the ones that are in
     the dump file
@@ -46,6 +47,7 @@ def get_cluster_data(raw_data, compute_ID, every, model, type_offset):
     count = 0
     box_sizes = []
     timesteps = []
+    rod_counts = [] #TODO implement rod counting by state (dictionary or list of tuples ?!)
     cluster_data = []
     for timestep, box_bounds, data_structure, data in raw_data:
         count += 1
@@ -53,6 +55,7 @@ def get_cluster_data(raw_data, compute_ID, every, model, type_offset):
             continue
         timesteps.append(timestep)
         box_sizes.append([x[1]-x[0] for x in box_bounds])
+        rod_count = {}
         cluster_ids = {} # key is a mol_id, value is a set of cluster ids
         snapshot_data = {} # key is the smallest mol_id, value is a list of (mol_id, rod_state) tuples
         current_mol_id = 0
@@ -64,8 +67,13 @@ def get_cluster_data(raw_data, compute_ID, every, model, type_offset):
                 continue #just skip non-molecule particles...
             cluster_id = int(line_vars['c_'+compute_ID])
             if mol_id != current_mol_id:
-                if current_cluster_ids:
+                if current_mol_id > 0:
                     current_rod_state = state_types_to_id(current_rod)
+                    if current_rod_state in rod_count:
+                        rod_count[current_rod_state] += 1
+                    else:
+                        rod_count[current_rod_state] = 1
+                if current_cluster_ids:
                     smallest_mol_id = None
                     for key, value in cluster_ids.items():
                         if value.intersection(current_cluster_ids):
@@ -83,6 +91,12 @@ def get_cluster_data(raw_data, compute_ID, every, model, type_offset):
             current_rod.append(int(line_vars['type']))
             if cluster_id > 0:
                 current_cluster_ids.add(cluster_id)
+        if current_mol_id > 0:
+            current_rod_state = state_types_to_id(current_rod)
+            if current_rod_state in rod_count:
+                rod_count[current_rod_state] += 1
+            else:
+                rod_count[current_rod_state] = 1
         if current_cluster_ids:
             smallest_mol_id = None
             for key, value in cluster_ids.items():
@@ -96,40 +110,43 @@ def get_cluster_data(raw_data, compute_ID, every, model, type_offset):
                 cluster_ids[current_mol_id] = current_cluster_ids
                 snapshot_data[current_mol_id] = [(current_mol_id, current_rod_state)]
         
+        rod_counts.append(rod_count)
         cluster_data.append(snapshot_data)
     
-    return timesteps, box_sizes, cluster_data
+    return timesteps, box_sizes, rod_counts, cluster_data
 
-def write_cluster_data(timesteps, box_sizes, cluster_data, output_path):
+def write_cluster_data(timesteps, box_sizes, rod_counts, cluster_data, output_path):
     '''
     Used to write the data returned by "get_cluster_data" to a file, although the
     "cluster_data" can be a corresponding length list of any kind of objects whose
     string representation can be eval'd back to the object (e.g. dict, list, tuple, ...).
     '''
     with open(output_path, 'w') as out_file:
-        for timestep, box_size, snapshot_data in zip(timesteps, box_sizes, cluster_data):
-            out_file.write('{:^10d} | {:s} | {:s}\n'.format(
-                timestep, str(box_size), str(snapshot_data)))
+        for timestep, box_size, rod_count, snapshot_data in zip(timesteps, box_sizes, rod_counts, cluster_data):
+            out_file.write('{:^10d} | {:s} | {:s} | {:s}\n'.format(
+                timestep, str(box_size), str(rod_count), str(snapshot_data)))
 
 def read_cluster_data(input_path):
     '''
     Reads what was outputed with "write_cluster_data".
     
-    returns : a triplet of a list of timesteps, a list of box dimensions and a corresponding
+    returns : a quadruplet of a list of timesteps, a list of box dimensions and a corresponding
     list of objects (e.g. "snapshot_data", like the one returned by "get_cluster_data")
     '''
     timesteps = []
     box_sizes = []
+    rod_counts = []
     cluster_data = []
     
     with open(input_path, 'r') as in_file:
         for line in in_file:
-            timestep, box_size, snapshot_data = line.split(' | ')
+            timestep, box_size, rod_count, snapshot_data = line.split(' | ')
             timesteps.append(int(timestep))
             box_sizes.append(eval(box_size))
+            rod_counts.append(eval(rod_count))
             cluster_data.append(eval(snapshot_data))
             
-    return timesteps, box_sizes, cluster_data
+    return timesteps, box_sizes, rod_counts, cluster_data
         
 #========================================================================================
 # some possible ways of analysis of the raw_data extracted from a dump file...

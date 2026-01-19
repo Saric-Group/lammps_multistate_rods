@@ -44,18 +44,15 @@ The requirements for using the library are:
     ```
     pip install numpy pyquaternion
     ```
-    * *scipy* and *matplotlib* are necessary for some tools, but not for the library itself (I think)
+    * *scipy* and *matplotlib* are necessary for some auxiliary tools, but not for the library itself (I think)
     * also *mpi4py* is necessary for the example `simulate_nvt.py` application (but that dependency can easily be removed by hand)
 
 2. The *develop* branch of my LAMMPS fork built with the *molecule*, *rigid*, *mc*, *python* and *extra-pair* (for the *cosine/squared* pair potential) modules:
     ```
     git clone -b develop https://github.com/erozic/lammps.git <LAMMPS_dir>  
-    cd <LAMMPS_dir>/src
-    make no-all # also can't harm to clean, purge and package-update beforehand...
-    make yes-molecule yes-rigid yes-mc yes-python yes-extra-pair # and any additoinal ones...
-    make -j4 <target> mode=shared LMP_INC="-DLAMMPS_EXCEPTIONS" # <target> is the make configuration, e.g. serial, mpi or any other in <LAMMPS_dir>/src/MAKE/...
-    make install-python
+    ...
     ```
+    * there is a script that contains building and setting up of this LAMMPS (my fork) in another depository of mine (https://github.com/Saric-Group/amyloid-simulations), in the "setup_scripts" folder
     * using my fork of LAMMPS is necessary (for now) because of the *change/state* fix which is not yet part of standard LAMMPS (although I soon plan it to be, and I keep this *develop* branch updated with the official LAMMPS *develop* branch). Also, it might contain some other non-essential features and will contain all future updates relevant for the optimal functioning of this library.
 
 ## Old version

@@ -61,8 +61,8 @@ def prepare_fibril(model, N, phi, theta, r0, data = None, out_path = None):
 
     loc = [None]*N # list of position 3-vectors
     rot = [None]*N # list of tuples of a position 3-vector and angle
-    mins = [np.infty]*3
-    maxs = [-np.infty]*3
+    mins = [np.inf]*3
+    maxs = [-np.inf]*3
 
     for i in range(N):
         if i % 2 == 0:
